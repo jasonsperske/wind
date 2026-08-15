@@ -48,6 +48,10 @@ export const LAND_HAZE = [
   new THREE.Color(0xdfe9f4),   // tundra
 ];
 
+// The same three on the minimap, matching what world.svg fills them with, so
+// the map you fly with looks like the file you drew.
+export const LAND_MAP = ['#b9d3a4', '#e7d3a4', '#dfe9f4'];
+
 export const GUSTS = ['calm', 'a stirring', 'a breeze', 'a strong breeze', 'a gale'];
 export function gustIndex(force) { return Math.min(4, Math.floor(force * 4.999)); }
 

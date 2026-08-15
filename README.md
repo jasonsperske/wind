@@ -4,6 +4,8 @@ You are a gust crossing a meadow, and the dunes and tundra beyond it. Skim low. 
 the grass parts around a closed bud, hold over it until it opens — the petals it gives
 you make you stronger, and a stronger wind can climb.
 
+![A gale skimming low over the meadow, carrying ninety petals](docs/screenshot.jpg)
+
 The world is drawn in an SVG. [`world/world.svg`](world/world.svg) opens in a browser
 or in Inkscape as a map, and it *is* the map — see
 [The world is an SVG](#the-world-is-an-svg).
@@ -109,9 +111,10 @@ The `data-` prefix is optional: plain `region`, `altitude` and so on work too, f
 editors that strip unknown `data-` attributes.
 
 On the `<svg>` element, `data-meters-per-unit` says how big a user unit is (1 metre by
-default) and `data-origin` says which unit is world `(0, 0)`. SVG *y* runs down the
-page and becomes world *z*, which runs north. Anything without `data-region` — text,
-a background rect, a legend — is ignored, so the file can look like a map.
+default) and `data-origin` says which unit is world `(0, 0)`. SVG *y* becomes world
+*z*, so what you read off the page is what the game measures. Anything without
+`data-region` — text, a background rect, a legend — is ignored, so the file can look
+like a map.
 
 A few things fall out of using real SVG rather than a format of our own:
 
@@ -146,6 +149,23 @@ a fence: `src/boundary.js`, tuned by the `BOUND_*` constants in `src/config.js`.
 You can see it coming. The grass gives out about 16 m before the edge does, and the
 ground itself dissolves into haze over the next 30 — so the world ends in a mist bank
 you can read from a long way off, rather than somewhere you find by being shoved.
+
+### The minimap
+
+Press **`M`**, or start with `?map=1`, or call `wind.minimap.toggle()` from the console
+under `?debug=1`. It draws the regions straight out of the map — same colours, same
+orientation, holes and all — with a wedge for where you are and which way you are
+going, a ring at the point you start from, a circle for how far you can see, and a line
+underneath giving your coordinates, the region you are over, and how far the edge is.
+The wedge turns red while the headwind is turning you.
+
+```
+http://localhost:8080/?map=1&debug=1
+```
+
+It is a DOM overlay, so like the rest of the DOM it is not there inside a headset
+session — it is for flying the map on a desktop while you draw it. If you want one in
+the headset it would want to be a world-space panel like `src/vrhud.js`.
 
 ### How a shape becomes ground
 
@@ -213,6 +233,7 @@ src/
   game.js           player state and the per-frame update
   regions.js        world.svg -> outlines -> the baked field grid
   boundary.js       the headwind at the edge of the world
+  minimap.js        the debug map in the corner — M, or ?map=1
   turning.js        deadzone / curve / rate smoothing — all steering feel
   xrinput.js        Touch controller axes -> normalised -1..1
   input.js          keyboard, touch and pointer-lock
@@ -227,6 +248,7 @@ vendor/three.module.js   three.js r128, vendored so the headset needs no network
 scripts/serve.js         dependency-free static server
 scripts/quest.js         adb reverse + serve
 reference/thewind.html   the original single-file prototype, kept for diffing
+docs/screenshot.jpg      the picture at the top of this README
 ```
 
 `field.js` holds the terrain height function twice, once in JS and once in GLSL.

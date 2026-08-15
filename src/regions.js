@@ -138,6 +138,15 @@ function readRegions(svg) {
 
 /* ------------------------------- the field ------------------------------- */
 
+// Which region's ground you are standing on, or null for nowhere. Where shapes
+// overlap the one listed last wins, the same painter's order the bake uses.
+export function regionAt(world, x, z) {
+  for (let i = world.regions.length - 1; i >= 0; i--) {
+    if (insideRegion(world.regions[i], x, z)) return world.regions[i];
+  }
+  return null;
+}
+
 function insideRegion(region, x, z) {
   let odd = false;
   for (const ring of region.rings) {

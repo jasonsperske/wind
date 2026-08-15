@@ -38,7 +38,7 @@ const game = createGame({ renderer, scene, camera, rig, input, hud, world });
 
 // `?debug=1` exposes the innards for poking at from the console.
 if (new URLSearchParams(location.search).has('debug')) {
-  window.wind = { renderer, scene, camera, rig, game, settings, world };
+  window.wind = { renderer, scene, camera, rig, game, settings, world, minimap: game.minimap };
 }
 
 /* -------------------------------- WebXR --------------------------------- */

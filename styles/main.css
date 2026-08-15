@@ -59,5 +59,17 @@ button[hidden]{display:none}
   font-size:.68rem;letter-spacing:.24em;text-transform:uppercase;color:#fbfdfa;
   text-shadow:0 1px 6px rgba(30,50,40,.5);opacity:0;transition:opacity .6s;z-index:5;pointer-events:none}
 #gust.on{opacity:.75}
+/* the debug minimap — M, or ?map=1 */
+#minimap{position:fixed;top:max(1rem,env(safe-area-inset-top));left:1rem;z-index:6;
+  padding:.5rem;border-radius:.7rem;pointer-events:none;
+  border:1px solid rgba(255,255,255,.28);background:rgba(24,38,32,.42);
+  backdrop-filter:blur(4px);box-shadow:0 2px 14px rgba(20,34,28,.28)}
+#minimap[hidden]{display:none}
+/* the page-wide canvas rule is for the renderer's, not this one */
+#minimap canvas{position:static;inset:auto;border-radius:.35rem}
+#minimap .read{margin-top:.4rem;font-size:.62rem;letter-spacing:.09em;
+  color:#eef5ee;text-shadow:0 1px 4px rgba(20,34,28,.6);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+
 #err{position:fixed;inset:auto 1rem 1rem;font-size:.8rem;color:#7a2c22;z-index:20}
 @media (prefers-reduced-motion:reduce){#veil{transition:none}}

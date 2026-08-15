@@ -11,6 +11,7 @@ import { createFlowers } from './flowers.js';
 import { createFlyingPetals, createCarriedPetals } from './petals.js';
 import { createVignette } from './vignette.js';
 import { createVrHud } from './vrhud.js';
+import { createMinimap } from './minimap.js';
 import { chime, updateWind } from './audio.js';
 import { readXRInput } from './xrinput.js';
 
@@ -30,6 +31,7 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world }) 
   const vignette = createVignette(camera);
   const vrHud = createVrHud(scene);
   const boundary = createBoundary(world);
+  const minimap = createMinimap(world);
 
   const player = {
     pos: new THREE.Vector3(world.home.x, 0, world.home.z),
@@ -247,6 +249,7 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world }) 
       if (vrHud.mesh.visible) vrHud.hide();
       if (started) hud.update(player.petals, player.force);
     }
+    minimap.update(dt, player.pos.x, player.pos.z, hy, edge.push, inXR);
   }
 
   function idle(dt) {
@@ -261,6 +264,6 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world }) 
 
   return {
     update, idle, begin, applyQuality, onSessionStart, onSessionEnd, player,
-    vrHud, isStarted: () => started,
+    vrHud, minimap, isStarted: () => started,
   };
 }
