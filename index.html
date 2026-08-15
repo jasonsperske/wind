@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#cfe3ea">
+<title>The Wind</title>
+<link rel="stylesheet" href="./styles/main.css">
+</head>
+<body>
+<div id="gust">calm</div>
+<div id="hud"><span id="petals">0</span><span>petals carried</span></div>
+
+<div id="veil">
+  <h1>The Wind</h1>
+  <p class="sub">You are a gust crossing a meadow, and the dunes and tundra beyond it. Skim low. Where the grass
+     parts around a closed bud, hold over it until it opens — the petals it gives you make you stronger, and a
+     stronger wind can climb. Stray past the last of the ground and the wind turns you back.</p>
+  <div class="keys">
+    <span>Drag anywhere to steer</span><span>Hold two fingers to gust</span><span>W A S D · Shift</span>
+    <span>Headset: right stick turns · left stick or trigger gusts</span>
+  </div>
+
+  <div class="row">
+    <button class="primary" id="start">Begin</button>
+    <button id="vr" hidden>Enter headset</button>
+  </div>
+
+  <details id="settings">
+    <summary>Comfort &amp; steering</summary>
+    <div class="opts">
+      <label>
+        <span>Turning</span>
+        <select id="turnMode">
+          <option value="smooth">Smooth</option>
+          <option value="snap">Snap</option>
+        </select>
+      </label>
+      <label>
+        <span>Turn speed <em id="turnSpeedOut"></em></span>
+        <input id="turnSpeed" type="range" min="0.6" max="3.6" step="0.1">
+      </label>
+      <label>
+        <span>Snap angle <em id="snapAngleOut"></em></span>
+        <input id="snapAngle" type="range" min="15" max="60" step="5">
+      </label>
+      <label class="check">
+        <input id="vignette" type="checkbox">
+        <span>Comfort vignette while turning</span>
+      </label>
+      <label>
+        <span>Headset detail</span>
+        <select id="quality">
+          <option value="low">Low — smoothest</option>
+          <option value="medium">Medium</option>
+          <option value="high">High — richest</option>
+        </select>
+      </label>
+    </div>
+  </details>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.js"
+  }
+}
+</script>
+<script type="module" src="./src/main.js"></script>
+<noscript><p class="sub">The Wind needs JavaScript and WebGL.</p></noscript>
+</body>
+</html>

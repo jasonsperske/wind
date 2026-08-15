@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The map. Open this file in a browser or in Inkscape and you are looking at the
+  world you fly in.
+
+  Every shape carrying data-region is somewhere you are allowed to be. The union
+  of them is the whole of it; outside, the wind turns you back.
+
+    data-region      the name, for your own benefit
+    data-altitude    metres the ground sits at under this shape   (default 0)
+    data-waviness    how hard the hills roll here, 0 is a plain   (default 1)
+    data-landscape   meadow | dune | tundra                       (default meadow)
+
+  One unit is one metre (data-meters-per-unit) and data-origin says which unit
+  is world (0,0), so what you read off the page is what the game measures. SVG y
+  runs down the page and becomes world z, which runs north. You start at the
+  deepest point of the first region listed.
+
+  Shapes are allowed to overlap — where they do there is no edge, which is how
+  you get from one to the next — and where they do, the later shape is the one
+  whose ground you are on. A second subpath inside a shape is a hole you have to
+  fly around.
+
+  Fills and strokes are here so the file reads as a map. The game ignores them.
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="-700 -560 1400 1000" width="1400" height="1000"
+     data-world="the-wind" data-meters-per-unit="1" data-origin="0 0">
+
+  <title>The Wind — the world</title>
+  <desc>Three regions: a meadow, the dunes east of it, and the tundra above.</desc>
+
+  <rect x="-700" y="-560" width="1400" height="1000" fill="#eef2ee"/>
+
+  <!-- The meadow. Ordinary ground, ordinary hills — this is where you start. -->
+  <path data-region="Meadow"
+        data-altitude="0" data-waviness="1" data-landscape="meadow"
+        fill="#b9d3a4" fill-opacity="0.85" stroke="#5d7a4c" stroke-width="2"
+        d="M -300,20
+           C -300,-120 -200,-210 -60,-220
+           C 80,-230 170,-150 180,-20
+           C 190,110 110,220 -30,240
+           C -170,260 -300,160 -300,20
+           Z"/>
+
+  <!-- The dunes, a little higher and rolling much harder. The second subpath is
+       an outcrop of rock: a hole in the world with a wind around it. -->
+  <path data-region="The dunes"
+        data-altitude="7" data-waviness="1.7" data-landscape="desert"
+        fill="#e7d3a4" fill-opacity="0.85" stroke="#a8935c" stroke-width="2"
+        fill-rule="evenodd"
+        d="M 120,-40
+           C 150,-160 280,-200 380,-150
+           C 470,-105 500,20 450,110
+           C 400,200 260,225 180,150
+           C 118,102 95,50 120,-40
+           Z
+           M 305,0
+           C 333,0 347,20 334,42
+           C 321,64 287,64 277,41
+           C 267,18 281,0 305,0
+           Z"/>
+
+  <!-- The tundra, up on a shelf. Flat white ground broken by long swells. -->
+  <path data-region="The tundra"
+        data-altitude="16" data-waviness="2.2" data-landscape="icy"
+        fill="#dfe9f4" fill-opacity="0.9" stroke="#8ba3ba" stroke-width="2"
+        d="M -520,-140
+           C -520,-262 -420,-342 -300,-330
+           C -190,-320 -128,-250 -150,-160
+           C -172,-70 -240,-18 -350,-30
+           C -452,-42 -520,-70 -520,-140
+           Z"/>
+
+  <!-- Nothing below is a region, and nothing below is in the game. -->
+  <g fill="#4a5a4a" font-family="Georgia, serif" font-size="22" pointer-events="none">
+    <text x="-120" y="20">meadow</text>
+    <text x="270" y="-60">dunes</text>
+    <text x="-380" y="-180">tundra</text>
+  </g>
+  <g fill="#8a948a" font-family="Georgia, serif" font-size="16">
+    <text x="-690" y="415">1 unit = 1 metre · origin at the centre of the viewBox</text>
+  </g>
+</svg>
