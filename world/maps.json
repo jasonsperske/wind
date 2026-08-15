@@ -1,0 +1,8 @@
+{
+  "default": "three-lands",
+  "maps": [
+    { "id": "three-lands", "name": "The three lands", "file": "world.svg" },
+    { "id": "lake",        "name": "The lake at dusk", "file": "lake.svg" },
+    { "id": "whiteout",    "name": "Whiteout",         "file": "whiteout.svg" }
+  ]
+}

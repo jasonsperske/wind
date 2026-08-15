@@ -1,15 +1,15 @@
 // A map of the world, in the corner, for when you are lost in it.
 //
-// Off by default — `M` toggles it, `?map=1` starts it on, and under `?debug=1`
-// it is `wind.minimap`. It draws the region outlines straight out of world.svg
-// rather than anything derived, and keeps the page's orientation while it does:
+// Off by default — `M` toggles it, `?minimap=1` starts it on, and under
+// `?debug=1` it is `wind.minimap`. It draws the region outlines straight out of
+// the map rather than anything derived, and keeps the page's orientation:
 // world z runs *down* the map exactly as SVG y runs down the file, so what you
 // see here is the drawing you edited.
 //
 // It is a DOM overlay, which means it is not there inside a headset session —
 // nothing in the DOM is.
 
-import { LAND_MAP, VIEW } from './config.js';
+import { LAND_MAP, WATER_MAP, VIEW } from './config.js';
 import { regionAt } from './regions.js';
 
 const LONG = 240;        // css px on the map's long side
@@ -84,6 +84,36 @@ export function createMinimap(world) {
       bx.lineWidth = 1;
       bx.stroke();
     }
+    // lakes sit on top of the ground they are drawn on
+    for (const lake of world.lakes) {
+      bx.beginPath();
+      for (const ring of lake.rings) {
+        for (let i = 0; i < ring.length; i += 2) {
+          const x = px(ring[i]), z = pz(ring[i + 1]);
+          if (i === 0) bx.moveTo(x, z); else bx.lineTo(x, z);
+        }
+        bx.closePath();
+      }
+      bx.fillStyle = WATER_MAP;
+      bx.fill('evenodd');
+    }
+    // and where things grow, as an outline rather than a fill
+    for (const s of world.scatters) {
+      bx.beginPath();
+      for (const ring of s.rings) {
+        for (let i = 0; i < ring.length; i += 2) {
+          const x = px(ring[i]), z = pz(ring[i + 1]);
+          if (i === 0) bx.moveTo(x, z); else bx.lineTo(x, z);
+        }
+        bx.closePath();
+      }
+      bx.strokeStyle = s.kind === 0 ? 'rgba(32,74,36,0.55)' : 'rgba(58,58,58,0.5)';
+      bx.setLineDash(s.kind === 0 ? [3, 3] : [1, 3]);
+      bx.lineWidth = 1;
+      bx.stroke();
+      bx.setLineDash([]);
+    }
+
     // where you started
     bx.beginPath();
     bx.arc(px(world.home.x), pz(world.home.z), 2.5, 0, Math.PI * 2);
@@ -94,7 +124,7 @@ export function createMinimap(world) {
   paintBase();
 
   /* --------------------------------- draw -------------------------------- */
-  const probe = new Float32Array(6);
+  const probe = new Float32Array(8);
   let since = RATE;
   let shown = false;
   let lastRead = '';
@@ -157,7 +187,7 @@ export function createMinimap(world) {
   });
 
   const q = new URLSearchParams(location.search);
-  if (q.has('map') && q.get('map') !== '0') setShown(true);
+  if (q.has('minimap') && q.get('minimap') !== '0') setShown(true);
 
   return {
     update, setShown,

@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Tundra under a full moon, snowing hard. Almost nothing grows; what is out
+  there is rock, and a frozen tarn.
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="-520 -420 1040 840" width="1040" height="840"
+     data-world="the-wind" data-meters-per-unit="1" data-origin="0 0"
+     data-name="Whiteout"
+     data-time="night-full" data-weather="blizzard" data-weather-amount="0.85">
+
+  <title>The Wind — whiteout</title>
+
+  <rect x="-520" y="-420" width="1040" height="840" fill="#eef2ee"/>
+
+  <!-- One long field of snow, high up and rolling hard. -->
+  <path data-region="The white"
+        data-altitude="48" data-waviness="2.8" data-landscape="snow"
+        fill="#dfe9f4" fill-opacity="0.9" stroke="#8ba3ba" stroke-width="2"
+        d="M -400,-60
+           C -410,-250 -230,-350 -10,-345
+           C 220,-340 400,-235 405,-50
+           C 410,140 240,315 10,320
+           C -220,325 -390,140 -400,-60
+           Z"/>
+
+  <!-- A shallow bowl of bare, lower ground in the middle of it, so the map is
+       not one flat sheet. -->
+  <path data-region="The hollow"
+        data-altitude="22" data-waviness="1.1" data-landscape="tundra"
+        fill="#eaf0f7" fill-opacity="0.9" stroke="#9db2c6" stroke-width="2"
+        d="M -160,-30
+           C -160,-140 -60,-200 60,-185
+           C 175,-171 235,-80 210,25
+           C 186,125 70,190 -40,172
+           C -145,155 -160,60 -160,-30
+           Z"/>
+
+  <!-- The tarn, frozen flat in the bottom of the hollow. -->
+  <path data-water="The tarn" data-altitude="20"
+        fill="#7fa9c4" fill-opacity="0.85" stroke="#4d7a94" stroke-width="2"
+        d="M -80,10
+           C -80,-55 -20,-90 50,-78
+           C 116,-67 140,-5 118,45
+           C 96,95 20,120 -34,102
+           C -84,85 -80,52 -80,10
+           Z"/>
+
+  <!-- Rock breaking through the snow, all round the rim. -->
+  <path data-scatter="rocks" data-density="0.7"
+        fill="none" stroke="#7a6a48" stroke-width="1.5" stroke-dasharray="2 5"
+        fill-rule="evenodd"
+        d="M -385,-58
+           C -394,-240 -222,-335 -10,-330
+           C 212,-325 385,-226 390,-50
+           C 395,132 232,300 10,305
+           C -212,310 -376,132 -385,-58
+           Z
+           M -230,-40
+           C -238,-170 -110,-250 0,-246
+           C 120,-242 250,-165 254,-40
+           C 258,90 130,220 0,224
+           C -130,228 -222,90 -230,-40
+           Z"/>
+
+  <!-- A stand of dead trees that survived in the shelter of the hollow. -->
+  <path data-scatter="trees" data-density="0.28"
+        fill="none" stroke="#3c6b3f" stroke-width="1.5" stroke-dasharray="6 5"
+        d="M -300,120
+           C -250,60 -160,70 -140,140
+           C -122,205 -190,265 -258,240
+           C -318,218 -334,165 -300,120
+           Z"/>
+
+  <g fill="#4a5a4a" font-family="Georgia, serif" font-size="22" pointer-events="none">
+    <text x="-40" y="14">the tarn</text>
+    <text x="-330" y="-190">the white</text>
+  </g>
+</svg>

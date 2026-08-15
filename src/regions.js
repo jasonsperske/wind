@@ -6,6 +6,10 @@
 // (`data-landscape`). The union of every such shape is the whole of the flyable
 // world; leave it and boundary.js turns you around.
 //
+// Two other kinds of shape sit inside those regions rather than extending them:
+// `data-water` is a lake, whose surface the ground is flattened to, and
+// `data-scatter` is where trees or rocks stand.
+//
 // Reading the outlines is left to the browser. `getPointAtLength` walks
 // anything the path spec allows — arcs, curves, several subpaths — so a file
 // saved out of Inkscape drops straight in and holes come for free. What this
@@ -91,6 +95,19 @@ function outlines(el, matrix, stepUser, toWorld) {
   return rings;
 }
 
+export const SCATTERS = ['tree', 'rock'];
+
+const SCATTER_ALIAS = {
+  trees: 'tree', wood: 'tree', woods: 'tree', forest: 'tree', copse: 'tree',
+  rocks: 'rock', stone: 'rock', stones: 'rock', boulder: 'rock', boulders: 'rock',
+};
+
+function scatterOf(el) {
+  let name = attrOf(el, 'scatter').toLowerCase();
+  name = SCATTER_ALIAS[name] || name;
+  return SCATTERS.indexOf(name);
+}
+
 function readRegions(svg) {
   const scale = Math.abs(numOf(svg, 'meters-per-unit', 1)) || 1;
 
@@ -113,19 +130,23 @@ function readRegions(svg) {
   const root = typeof svg.getScreenCTM === 'function' ? svg.getScreenCTM() : null;
   const inv = root ? root.inverse() : null;
 
-  const out = [];
-  for (const el of svg.querySelectorAll('[data-region], [region]')) {
-    if (typeof el.getTotalLength !== 'function') continue;
+  function ringsFor(el) {
+    if (typeof el.getTotalLength !== 'function') return [];
     let m = null;
     if (inv && typeof el.getScreenCTM === 'function') {
       const c = el.getScreenCTM();
       if (c) m = inv.multiply(c);
     }
-    const rings = outlines(el, m, STEP / scale, toWorld);
+    return outlines(el, m, STEP / scale, toWorld);
+  }
+
+  const regions = [];
+  for (const el of svg.querySelectorAll('[data-region], [region]')) {
+    const rings = ringsFor(el);
     if (!rings.length) continue;
     const land = landOf(el);
-    out.push({
-      name: attrOf(el, 'region') || 'region ' + (out.length + 1),
+    regions.push({
+      name: attrOf(el, 'region') || 'region ' + (regions.length + 1),
       altitude: numOf(el, 'altitude', 0),
       waviness: numOf(el, 'waviness', 1),
       landscape: LANDSCAPES[land],
@@ -133,7 +154,40 @@ function readRegions(svg) {
       rings,
     });
   }
-  return out;
+
+  // A lake sits inside a region rather than adding to it. Its altitude is the
+  // surface; leave it off and it settles a couple of metres into whatever
+  // ground it is drawn on.
+  const lakes = [];
+  for (const el of svg.querySelectorAll('[data-water], [water]')) {
+    const rings = ringsFor(el);
+    if (!rings.length) continue;
+    lakes.push({
+      name: attrOf(el, 'water') || 'water ' + (lakes.length + 1),
+      level: numOf(el, 'altitude', NaN),
+      rings,
+    });
+  }
+
+  const scatters = [];
+  for (const el of svg.querySelectorAll('[data-scatter], [scatter]')) {
+    const kind = scatterOf(el);
+    if (kind < 0) continue;
+    const rings = ringsFor(el);
+    if (!rings.length) continue;
+    scatters.push({
+      kind, rings,
+      density: Math.max(0, Math.min(1, numOf(el, 'density', 1))),
+    });
+  }
+
+  return {
+    regions, lakes, scatters,
+    name: attrOf(svg, 'name'),
+    time: attrOf(svg, 'time'),
+    weather: attrOf(svg, 'weather'),
+    weatherAmount: numOf(svg, 'weather-amount', NaN),
+  };
 }
 
 /* ------------------------------- the field ------------------------------- */
@@ -142,14 +196,16 @@ function readRegions(svg) {
 // overlap the one listed last wins, the same painter's order the bake uses.
 export function regionAt(world, x, z) {
   for (let i = world.regions.length - 1; i >= 0; i--) {
-    if (insideRegion(world.regions[i], x, z)) return world.regions[i];
+    if (insideRings(world.regions[i].rings, x, z)) return world.regions[i];
   }
   return null;
 }
 
-function insideRegion(region, x, z) {
+// Even-odd across every ring of a shape, so a second subpath reads as the hole
+// it is. Used for regions, lakes and scatter shapes alike.
+export function insideRings(rings, x, z) {
   let odd = false;
-  for (const ring of region.rings) {
+  for (const ring of rings) {
     const n = ring.length >> 1;
     for (let i = 0, j = n - 1; i < n; j = i++) {
       const zi = ring[i * 2 + 1], zj = ring[j * 2 + 1];
@@ -160,6 +216,17 @@ function insideRegion(region, x, z) {
     }
   }
   return odd;
+}
+
+// How much of each scatter kind belongs at a point: 0 nowhere, otherwise the
+// density of the shape covering it.
+export function scatterAt(world, kind, x, z) {
+  let d = 0;
+  for (const s of world.scatters) {
+    if (s.kind !== kind || s.density <= d) continue;
+    if (insideRings(s.rings, x, z)) d = s.density;
+  }
+  return d;
 }
 
 // Separable running-sum box blur of one channel of an interleaved RGBA grid.
@@ -186,7 +253,8 @@ function blurChannel(grid, nx, nz, ch, r, tmp) {
   }
 }
 
-function bake(regions) {
+function bake(read) {
+  const { regions, lakes, scatters } = read;
   let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
   for (const r of regions) {
     for (const ring of r.rings) {
@@ -232,12 +300,23 @@ function bake(regions) {
     const mz = (seg[k * 4 + 1] + seg[k * 4 + 3]) * 0.5;
     for (let ri = 0; ri < regions.length; ri++) {
       if (ri === reg[k]) continue;
-      if (insideRegion(regions[ri], mx, mz)) { buried[k] = 1; break; }
+      if (insideRings(regions[ri].rings, mx, mz)) { buried[k] = 1; break; }
     }
   }
 
-  const A = new Float32Array(nx * nz * 4);   // altitude, waviness, signed distance
-  const B = new Float32Array(nx * nz * 4);   // landscape weights
+  // A lake with no altitude of its own settles into the ground it is drawn on.
+  for (const lake of lakes) {
+    if (Number.isFinite(lake.level)) continue;
+    let cx = 0, cz = 0, n = 0;
+    for (const ring of lake.rings) {
+      for (let i = 0; i < ring.length; i += 2) { cx += ring[i]; cz += ring[i + 1]; n++; }
+    }
+    const under = n ? regionAt({ regions }, cx / n, cz / n) : null;
+    lake.level = (under ? under.altitude : 0) - 2.0;
+  }
+
+  const A = new Float32Array(nx * nz * 4);   // altitude, waviness, signed distance, water level
+  const B = new Float32Array(nx * nz * 4);   // meadow, dune, tundra, wetness
   const held = new Int16Array(nx * nz).fill(-1);
   const near = new Int32Array(count);
   const par = new Uint8Array(regions.length);
@@ -292,7 +371,6 @@ function bake(regions) {
       A[o] = R.altitude;
       A[o + 1] = R.waviness;
       A[o + 2] = holds >= 0 ? d : -d;
-      A[o + 3] = 1;
       B[o + R.land] = 1;
     }
   }
@@ -309,6 +387,38 @@ function bake(regions) {
     blurChannel(B, nx, nz, 2, r, tmp);
   }
 
+  // Lakes go in after the blur. The wetness mask is deliberately left crisp — a
+  // shoreline should be a shoreline, and the terrain's own 2.5 m quads are what
+  // soften it into a beach. Dry ground carries its own height as the "water
+  // level" so the two interpolate into each other at the shore instead of
+  // stepping.
+  for (let k = 0; k < nx * nz; k++) A[k * 4 + 3] = A[k * 4];
+  for (const lake of lakes) {
+    let lx0 = Infinity, lz0 = Infinity, lx1 = -Infinity, lz1 = -Infinity;
+    for (const ring of lake.rings) {
+      for (let i = 0; i < ring.length; i += 2) {
+        if (ring[i] < lx0) lx0 = ring[i];
+        if (ring[i] > lx1) lx1 = ring[i];
+        if (ring[i + 1] < lz0) lz0 = ring[i + 1];
+        if (ring[i + 1] > lz1) lz1 = ring[i + 1];
+      }
+    }
+    const i0 = Math.max(0, Math.floor((lx0 - x0) / cell));
+    const i1 = Math.min(nx - 1, Math.ceil((lx1 - x0) / cell));
+    const j0 = Math.max(0, Math.floor((lz0 - z0) / cell));
+    const j1 = Math.min(nz - 1, Math.ceil((lz1 - z0) / cell));
+    for (let j = j0; j <= j1; j++) {
+      const z = z0 + j * cell;
+      for (let i = i0; i <= i1; i++) {
+        const x = x0 + i * cell;
+        if (!insideRings(lake.rings, x, z)) continue;
+        const o = (j * nx + i) * 4;
+        A[o + 3] = lake.level;
+        B[o + 3] = 1;
+      }
+    }
+  }
+
   // You start deep inside the first region the map lists — deepest meaning
   // furthest from any edge, so the first thing you see is open world. Distances
   // are clipped, so the deepest part is usually a plateau of ties; take the
@@ -319,6 +429,7 @@ function bake(regions) {
       for (let i = 0; i < nx; i++) {
         const k = j * nx + i;
         if (pass === 0 ? held[k] !== 0 : held[k] < 0) continue;
+        if (B[k * 4 + 3] > 0.5) continue;          // not in the middle of a lake
         const s = A[k * 4 + 2];
         if (s > deepest) { deepest = s; homeI = i; homeJ = j; ties = 0; si = 0; sj = 0; }
         if (s >= deepest - 1e-3) { ties++; si += i; sj += j; }
@@ -327,12 +438,18 @@ function bake(regions) {
     if (ties > 0) break;      // nothing of the first region survives — take any
   }
   if (ties > 0) {
+    // The middle of a ring-shaped region is the hole in the middle of it, so
+    // the average only wins if it is somewhere you could actually stand: in the
+    // world, off the water, and not the far side of an edge.
     const mi = Math.round(si / ties), mj = Math.round(sj / ties);
-    if (held[mj * nx + mi] >= 0 && A[(mj * nx + mi) * 4 + 2] > 0) { homeI = mi; homeJ = mj; }
+    const mk = mj * nx + mi;
+    if (held[mk] >= 0 && A[mk * 4 + 2] > 0 && B[mk * 4 + 3] < 0.5) { homeI = mi; homeJ = mj; }
   }
 
   return {
-    regions, A, B, nx, nz, cell, x0, z0,
+    regions, lakes, scatters, A, B, nx, nz, cell, x0, z0,
+    name: read.name, time: read.time,
+    weather: read.weather, weatherAmount: read.weatherAmount,
     home: { x: x0 + homeI * cell, z: z0 + homeJ * cell },
     sample: sampler(A, B, nx, nz, cell, x0, z0),
   };
@@ -341,6 +458,10 @@ function bake(regions) {
 // Bilinear, matching what the shader gets from a LinearFilter texture sampled at
 // texel centres — the CPU decides where flowers sit and where the ground stops
 // you, the GPU draws it, and the two have to agree.
+//
+// Fills eight numbers:
+//   0 altitude  1 waviness  2 distance to the edge  3 water level
+//   4 meadow    5 dune      6 tundra                7 wetness
 function sampler(A, B, nx, nz, cell, x0, z0) {
   return function sample(x, z, out) {
     let gx = (x - x0) / cell, gz = (z - z0) / cell;
@@ -354,9 +475,9 @@ function sampler(A, B, nx, nz, cell, x0, z0) {
     const w01 = (1 - fx) * fz, w11 = fx * fz;
     const a = (j0 * nx + i0) * 4, b = (j0 * nx + i1) * 4;
     const c = (j1 * nx + i0) * 4, d = (j1 * nx + i1) * 4;
-    for (let ch = 0; ch < 3; ch++) {
+    for (let ch = 0; ch < 4; ch++) {
       out[ch]     = A[a + ch] * w00 + A[b + ch] * w10 + A[c + ch] * w01 + A[d + ch] * w11;
-      out[ch + 3] = B[a + ch] * w00 + B[b + ch] * w10 + B[c + ch] * w01 + B[d + ch] * w11;
+      out[ch + 4] = B[a + ch] * w00 + B[b + ch] * w10 + B[c + ch] * w01 + B[d + ch] * w11;
     }
     return out;
   };
@@ -373,12 +494,13 @@ export function flatWorld(note) {
   for (let k = 0; k < nx * nz; k++) {
     A[k * 4 + 1] = 1;          // ordinary hills
     A[k * 4 + 2] = MAX_D;      // and nowhere to fall off
-    A[k * 4 + 3] = 1;
+    A[k * 4 + 3] = 0;          // no water, so its "level" is the ground's
     B[k * 4] = 1;              // grass
   }
   return {
-    regions: [], A, B, nx, nz,
+    regions: [], lakes: [], scatters: [], A, B, nx, nz,
     cell: 4000, x0: -4000, z0: -4000,
+    name: '', time: '', weather: '', weatherAmount: NaN,
     home: { x: 0, z: 0 },
     sample: sampler(A, B, nx, nz, 4000, -4000, -4000),
     error: note || null,
@@ -411,16 +533,16 @@ export async function loadWorld(url) {
   host.appendChild(document.importNode(doc.documentElement, true));
   document.body.appendChild(host);
 
-  let regions = [];
+  let read = null;
   try {
-    regions = readRegions(host.firstChild);
+    read = readRegions(host.firstChild);
   } finally {
     host.remove();
   }
 
-  if (!regions.length) {
+  if (!read || !read.regions.length) {
     return flatWorld('The map <code>' + url + '</code> holds no shape marked <code>data-region</code>, '
       + 'so the meadow runs on without edges.');
   }
-  return bake(regions);
+  return bake(read);
 }

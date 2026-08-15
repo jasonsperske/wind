@@ -25,7 +25,8 @@
 -->
 <svg xmlns="http://www.w3.org/2000/svg"
      viewBox="-700 -560 1400 1000" width="1400" height="1000"
-     data-world="the-wind" data-meters-per-unit="1" data-origin="0 0">
+     data-world="the-wind" data-meters-per-unit="1" data-origin="0 0"
+     data-name="The three lands" data-time="day" data-weather="clear">
 
   <title>The Wind — the world</title>
   <desc>Three regions: a meadow, the dunes east of it, and the tundra above.</desc>
@@ -70,6 +71,33 @@
            C -190,-320 -128,-250 -150,-160
            C -172,-70 -240,-18 -350,-30
            C -452,-42 -520,-70 -520,-140
+           Z"/>
+
+  <!-- A pond in the fold of the meadow. No altitude given, so it settles two
+       metres into whatever ground it is drawn on. -->
+  <path data-water="The pond"
+        fill="#7fa9c4" fill-opacity="0.9" stroke="#4d7a94" stroke-width="1.5"
+        d="M -170,60
+           C -150,30 -95,26 -70,52
+           C -46,78 -58,124 -95,134
+           C -134,144 -172,120 -175,96
+           C -177,80 -177,70 -170,60
+           Z"/>
+
+  <!-- Woods along the north of the meadow, and boulders out in the dunes. -->
+  <path data-scatter="trees" data-density="0.75"
+        fill="none" stroke="#3c6b3f" stroke-width="1.5" stroke-dasharray="6 5"
+        d="M -250,-150
+           C -190,-205 -60,-215 30,-175
+           C 105,-142 120,-80 60,-62
+           C -20,-38 -190,-70 -250,-150
+           Z"/>
+  <path data-scatter="rocks" data-density="0.55"
+        fill="none" stroke="#7a6a48" stroke-width="1.5" stroke-dasharray="2 5"
+        d="M 190,-30
+           C 250,-95 380,-95 430,-30
+           C 470,20 430,90 350,95
+           C 260,100 160,40 190,-30
            Z"/>
 
   <!-- Nothing below is a region, and nothing below is in the game. -->

@@ -18,19 +18,27 @@ import { flatWorld } from './regions.js';
 let field = flatWorld();
 let texA = null, texB = null;
 
-const scratch = new Float32Array(6);
+const scratch = new Float32Array(8);
 
 /* ------------------------------- sampling -------------------------------- */
 
-// [altitude, waviness, signed distance to the edge, meadow, dune, tundra].
+// [altitude, waviness, distance to the edge, water level,
+//  meadow, dune, tundra, wetness].
 // The array is reused — read what you need before calling again.
 export function fieldAt(x, z) {
   return field.sample(x, z, scratch);
 }
 
+// Where a lake covers the ground, the ground *is* the lake's surface. Nothing
+// is drawn under water, so there is no bed to model — flattening to the water
+// level is both what it looks like and what you skim along.
+export function heightOf(f, x, z) {
+  const ground = f[0] + f[1] * hills(x, z);
+  return f[7] > 0.001 ? ground + (f[3] - ground) * Math.min(1, f[7]) : ground;
+}
+
 export function terrainH(x, z) {
-  const f = field.sample(x, z, scratch);
-  return f[0] + f[1] * hills(x, z);
+  return heightOf(field.sample(x, z, scratch), x, z);
 }
 
 export function hills(x, z) {
@@ -115,6 +123,7 @@ vec2 fieldUV(vec2 p){
   return (g + 0.5) / uFieldDim;
 }
 vec4 fieldA(vec2 p){ return texture2D(uFieldA, fieldUV(p)); }
+vec4 fieldB(vec2 p){ return texture2D(uFieldB, fieldUV(p)); }
 vec3 fieldLand(vec2 p){ return texture2D(uFieldB, fieldUV(p)).rgb; }
 
 float hills(vec2 p){
@@ -126,9 +135,14 @@ float hills(vec2 p){
   return h;
 }
 
+// f is fieldA, wet is fieldB.a — a lake flattens the ground to its surface.
+float heightOf(vec4 f, float wet, vec2 p){
+  float ground = f.x + f.y * hills(p);
+  return mix(ground, f.w, clamp(wet, 0.0, 1.0));
+}
+
 float terrainH(vec2 p){
-  vec4 f = fieldA(p);
-  return f.x + f.y * hills(p);
+  return heightOf(fieldA(p), fieldB(p).a, p);
 }
 `;
 

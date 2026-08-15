@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLSL_HSV } from './field.js';
-import { HAZE, FLYMAX, CARRY_MAX } from './config.js';
+import { LIGHT, FLYMAX, CARRY_MAX } from './config.js';
 import { petalGeometry } from './flowers.js';
 
 /* ----------------------- petals in flight toward you ---------------------- */
@@ -22,7 +22,7 @@ export function createFlyingPetals(scene) {
 
   const material = new THREE.ShaderMaterial({
     side: THREE.DoubleSide, transparent: true,
-    uniforms: { uHaze: { value: HAZE } },
+    uniforms: { uLight: { value: LIGHT } },
     vertexShader: GLSL_HSV + `
       attribute vec3 aPos; attribute float aRot, aHue;
       varying vec3 vCol;
@@ -36,7 +36,9 @@ export function createFlyingPetals(scene) {
         vCol = mix(hue2rgb(aHue), vec3(1.0), 0.35);
         gl_Position = projectionMatrix * viewMatrix * vec4(w,1.0);
       }`,
-    fragmentShader: 'varying vec3 vCol; void main(){ gl_FragColor = vec4(vCol, 0.96); }',
+    fragmentShader: `
+      uniform vec3 uLight; varying vec3 vCol;
+      void main(){ gl_FragColor = vec4(vCol * uLight, 0.96); }`,
   });
 
   const mesh = new THREE.Mesh(geometry, material);
@@ -106,6 +108,7 @@ export function createCarriedPetals(scene) {
     uniforms: {
       uTime: { value: 0 }, uCam: { value: new THREE.Vector3() },
       uCount: { value: 0 }, uFwd: { value: new THREE.Vector3(0, 0, -1) }, uSpeed: { value: 0 },
+      uLight: { value: LIGHT },
     },
     vertexShader: GLSL_HSV + `
       attribute float aIdx;
@@ -131,8 +134,8 @@ export function createCarriedPetals(scene) {
         gl_Position = projectionMatrix * viewMatrix * vec4(w,1.0);
       }`,
     fragmentShader: `
-      varying vec3 vCol; varying float vHide;
-      void main(){ if (vHide > 0.5) discard; gl_FragColor = vec4(vCol, 0.92); }`,
+      uniform vec3 uLight; varying vec3 vCol; varying float vHide;
+      void main(){ if (vHide > 0.5) discard; gl_FragColor = vec4(vCol * uLight, 0.92); }`,
   });
 
   const mesh = new THREE.Mesh(geometry, material);

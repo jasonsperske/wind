@@ -9,6 +9,10 @@ function fromQuery() {
   if (q.has('speed'))    out.turnSpeed = parseFloat(q.get('speed'));
   if (q.has('vignette')) out.vignette = q.get('vignette') !== '0';
   if (q.has('quality'))  out.quality = q.get('quality');
+  // ?map= picks which world to fly; the minimap overlay is ?minimap=
+  if (q.has('map'))      out.map = q.get('map');
+  if (q.has('time'))     out.time = q.get('time');
+  if (q.has('weather'))  out.weather = q.get('weather');
   return out;
 }
 

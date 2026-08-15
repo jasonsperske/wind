@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A wide lake in a wooded bowl, late in the day, with rain coming down on it.
+
+  Same rules as world.svg: data-region is somewhere you may fly, data-water is a
+  lake, data-scatter is where things grow. The <svg> element carries the hour
+  and the weather; the title screen can override either.
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="-560 -460 1120 920" width="1120" height="920"
+     data-world="the-wind" data-meters-per-unit="1" data-origin="0 0"
+     data-name="The lake at dusk"
+     data-time="dusk" data-weather="rain" data-weather-amount="0.55">
+
+  <title>The Wind — the lake at dusk</title>
+
+  <rect x="-560" y="-460" width="1120" height="920" fill="#eef2ee"/>
+
+  <!-- The bowl. Gentle ground, because the lake wants a flat rim. -->
+  <path data-region="The shore"
+        data-altitude="0" data-waviness="0.55" data-landscape="meadow"
+        fill="#b9d3a4" fill-opacity="0.85" stroke="#5d7a4c" stroke-width="2"
+        d="M -430,-40
+           C -430,-230 -250,-360 -20,-360
+           C 210,-360 420,-230 430,-30
+           C 440,180 250,350 10,355
+           C -230,360 -430,170 -430,-40
+           Z"/>
+
+  <!-- A shelf of higher, rougher ground on the east side, so there is
+       somewhere to climb to and look down from. -->
+  <path data-region="The ridge"
+        data-altitude="34" data-waviness="2.4" data-landscape="tundra"
+        fill="#dfe9f4" fill-opacity="0.9" stroke="#8ba3ba" stroke-width="2"
+        d="M 250,-250
+           C 380,-300 520,-240 530,-110
+           C 540,10 470,90 370,70
+           C 270,50 200,-40 220,-140
+           C 228,-186 232,-242 250,-250
+           Z"/>
+
+  <!-- The lake itself, sitting four metres down. The island is a second
+       subpath, which makes it a hole in the water rather than more water. -->
+  <path data-water="The lake" data-altitude="-4"
+        fill="#7fa9c4" fill-opacity="0.92" stroke="#4d7a94" stroke-width="2"
+        fill-rule="evenodd"
+        d="M -250,-30
+           C -250,-170 -120,-250 30,-235
+           C 180,-220 265,-110 240,20
+           C 215,150 80,235 -60,215
+           C -200,195 -250,90 -250,-30
+           Z
+           M -30,-40
+           C 20,-55 60,-25 52,20
+           C 44,65 -10,80 -42,50
+           C -72,22 -62,-30 -30,-40
+           Z"/>
+
+  <!-- Woods all round the water, thinning as they climb toward the ridge. -->
+  <path data-scatter="trees" data-density="0.9"
+        fill="none" stroke="#3c6b3f" stroke-width="1.5" stroke-dasharray="6 5"
+        fill-rule="evenodd"
+        d="M -400,-30
+           C -400,-215 -235,-335 -20,-335
+           C 195,-335 395,-215 405,-25
+           C 415,165 235,325 5,330
+           C -215,335 -400,155 -400,-30
+           Z
+           M -235,-30
+           C -235,-160 -115,-235 30,-220
+           C 172,-206 250,-105 226,15
+           C 202,140 75,220 -58,200
+           C -190,182 -235,82 -235,-30
+           Z"/>
+
+  <!-- and a scree of boulders under the ridge -->
+  <path data-scatter="boulders" data-density="0.6"
+        fill="none" stroke="#7a6a48" stroke-width="1.5" stroke-dasharray="2 5"
+        d="M 245,-235
+           C 370,-285 505,-230 515,-110
+           C 524,0 460,75 368,56
+           C 276,38 210,-45 228,-138
+           C 235,-180 230,-228 245,-235
+           Z"/>
+
+  <g fill="#4a5a4a" font-family="Georgia, serif" font-size="22" pointer-events="none">
+    <text x="-70" y="0">the lake</text>
+    <text x="300" y="-110">the ridge</text>
+  </g>
+</svg>

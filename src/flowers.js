@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { terrainH, fieldAt, hash2, GLSL_HSV } from './field.js';
-import { HAZE, VIEW, SUN, CELL, RING, FMAX, PET_PER } from './config.js';
+import { HAZE, FOG, LIGHT, SUN, CELL, RING, FMAX, PET_PER } from './config.js';
 
 export function petalGeometry() {
   // a lozenge, base at origin, pointing +Y
@@ -35,11 +35,12 @@ function buildHeads() {
     side: THREE.DoubleSide,
     uniforms: {
       uTime: { value: 0 }, uCam: { value: new THREE.Vector3() },
-      uHaze: { value: HAZE.clone() }, uView: { value: VIEW }, uSun: { value: SUN },
+      uHaze: { value: HAZE }, uFog: { value: FOG },
+      uLight: { value: LIGHT }, uSun: { value: SUN },
     },
     vertexShader: GLSL_HSV + `
       attribute vec3 aBase; attribute float aSpin, aBloom, aHue;
-      uniform float uTime; uniform vec3 uCam;
+      uniform float uTime; uniform vec3 uCam; uniform vec2 uFog;
       varying vec3 vCol; varying float vFog;
       void main(){
         float b = aBloom;
@@ -57,12 +58,12 @@ function buildHeads() {
         vec3 open = mix(hue2rgb(aHue), vec3(1.0), 0.30);
         vCol = mix(bud, open, b) * (0.72 + 0.42*position.y);
         vCol += vec3(0.25,0.22,0.10) * (1.0-b) * 0.5;   // buds catch the light
-        vFog = smoothstep(60.0, 105.0, length(w.xz - uCam.xz));
+        vFog = smoothstep(uFog.x, uFog.y, length(w.xz - uCam.xz));
         gl_Position = projectionMatrix * viewMatrix * vec4(w,1.0);
       }`,
     fragmentShader: `
-      uniform vec3 uHaze; varying vec3 vCol; varying float vFog;
-      void main(){ gl_FragColor = vec4(mix(vCol, uHaze, vFog), 1.0); }`,
+      uniform vec3 uHaze,uLight; varying vec3 vCol; varying float vFog;
+      void main(){ gl_FragColor = vec4(mix(vCol * uLight, uHaze, vFog), 1.0); }`,
   });
 
   const mesh = new THREE.Mesh(geometry, material);
@@ -88,10 +89,13 @@ function buildStems() {
 
   const material = new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
-    uniforms: { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uHaze: { value: HAZE.clone() } },
+    uniforms: {
+      uTime: { value: 0 }, uCam: { value: new THREE.Vector3() },
+      uHaze: { value: HAZE }, uFog: { value: FOG }, uLight: { value: LIGHT },
+    },
     vertexShader: `
       attribute vec3 aBase; attribute float aSeed;
-      uniform float uTime; uniform vec3 uCam;
+      uniform float uTime; uniform vec3 uCam; uniform vec2 uFog;
       varying float vFog; varying float vT;
       void main(){
         vec3 p = vec3(position.x*0.028, position.y, 0.0);
@@ -99,14 +103,14 @@ function buildStems() {
         p.x += sway*position.y*position.y;
         vec3 w = aBase + p;
         vT = position.y;
-        vFog = smoothstep(60.0, 105.0, length(w.xz - uCam.xz));
+        vFog = smoothstep(uFog.x, uFog.y, length(w.xz - uCam.xz));
         gl_Position = projectionMatrix * viewMatrix * vec4(w,1.0);
       }`,
     fragmentShader: `
-      uniform vec3 uHaze; varying float vFog; varying float vT;
+      uniform vec3 uHaze,uLight; varying float vFog; varying float vT;
       void main(){
         vec3 c = mix(vec3(0.16,0.30,0.12), vec3(0.34,0.48,0.18), vT);
-        gl_FragColor = vec4(mix(c, uHaze, vFog), 1.0);
+        gl_FragColor = vec4(mix(c * uLight, uHaze, vFog), 1.0);
       }`,
   });
 
@@ -140,10 +144,10 @@ export function createFlowers(scene) {
           const jx = (hash2(i + 0.5, j + 11.3) - 0.5) * CELL * 0.8;
           const jz = (hash2(i + 7.1, j - 3.7) - 0.5) * CELL * 0.8;
           const x = i * CELL + jx, z = j * CELL + jz;
-          // Nothing flowers on sand or ice, and nothing flowers out where the
-          // wind would have turned you around before you reached it.
+          // Nothing flowers on sand, ice or water, and nothing flowers out
+          // where the wind would have turned you around before you reached it.
           const s = fieldAt(x, z);
-          if (s[2] < 4.0 || s[3] < 0.5) continue;
+          if (s[2] < 4.0 || s[4] < 0.5 || s[7] > 0.2) continue;
           f = {
             id, x, z, y: terrainH(x, z),
             hue: hash2(i * 3.3, j * 5.9), seed: h * 6.28,
@@ -228,10 +232,5 @@ export function createFlowers(scene) {
     stems.material.uniforms.uTime.value = elapsed;
   }
 
-  function setHaze(c) {
-    heads.material.uniforms.uHaze.value.copy(c);
-    stems.material.uniforms.uHaze.value.copy(c);
-  }
-
-  return { update, setUniforms, setTime, setHaze, rebuild };
+  return { update, setUniforms, setTime, rebuild };
 }

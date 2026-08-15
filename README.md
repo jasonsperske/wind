@@ -6,9 +6,10 @@ you make you stronger, and a stronger wind can climb.
 
 ![A gale skimming low over the meadow, carrying ninety petals](docs/screenshot.jpg)
 
-The world is drawn in an SVG. [`world/world.svg`](world/world.svg) opens in a browser
-or in Inkscape as a map, and it *is* the map — see
-[The world is an SVG](#the-world-is-an-svg).
+The worlds are drawn in SVG. [`world/world.svg`](world/world.svg) opens in a browser
+or in Inkscape as a map, and it *is* the map — regions, lakes, woods, the hour and the
+weather, all of it. See [The world is an SVG](#the-world-is-an-svg). There are three to
+pick from on the title screen.
 
 A WebXR toy: three.js, no build step, no dependencies to install. Runs in a desktop
 browser and in the Quest 2 browser over USB port forwarding.
@@ -91,8 +92,8 @@ stops meaning anything — it holds still rather than spinning.
 
 ## The world is an SVG
 
-Everywhere you are allowed to fly is a closed shape in `world/world.svg`. Draw one,
-give it `data-region`, and it is somewhere in the game.
+Everywhere you are allowed to fly is a closed shape in one of the files in `world/`.
+Draw one, give it `data-region`, and it is somewhere in the game.
 
 ```xml
 <path data-region="The dunes"
@@ -109,6 +110,78 @@ give it `data-region`, and it is somewhere in the game.
 
 The `data-` prefix is optional: plain `region`, `altitude` and so on work too, for
 editors that strip unknown `data-` attributes.
+
+### Water, trees and rocks
+
+Two other kinds of shape sit *inside* regions rather than extending them.
+
+```xml
+<path data-water="The lake" data-altitude="-4" d="M … Z"/>
+<path data-scatter="trees" data-density="0.9" d="M … Z"/>
+```
+
+| Attribute | Default | What it does |
+| --- | --- | --- |
+| `data-water` | — | A lake. The ground is flattened to `data-altitude`, which is its surface |
+| `data-altitude` on water | 2 m into the ground below | Where the surface sits |
+| `data-scatter` | — | `tree` or `rock` — also `trees`, `wood`, `forest`, `stone`, `boulders` |
+| `data-density` | `1` | Thins the scatter. `0.3` is an open stand, `1` is as thick as it gets |
+
+Water is a channel of the same baked field as everything else, so the surface you
+see is the surface you skim — you cannot get under it, and grass and flowers keep
+out of it. A hole in a lake is an island. Shorelines stay crisp because the
+wetness mask is the one thing in the bake that is deliberately *not* blurred.
+
+Trees and rocks come off a fixed lattice thinned by `data-density`, the same
+trick the flowers use, so a tree is in the same place every time you pass it and
+none of it is stored. They sway in your gust as the grass does. **Nothing is
+solid** — you are wind, you go through the branches. Making them stop you would
+be a real change to how the game feels, so it is not in.
+
+### The hour and the weather
+
+The `<svg>` element says what the map's weather is like:
+
+```xml
+<svg … data-name="The lake at dusk"
+       data-time="dusk" data-weather="rain" data-weather-amount="0.55">
+```
+
+| Attribute | Values |
+| --- | --- |
+| `data-time` | `day`, `dusk`, `night-full`, `night-new` — plus `sunset`, `night`, `newmoon`, `midnight` and friends |
+| `data-weather` | `clear`, `mist`, `fog`, `drizzle`, `rain`, `downpour`, `snow`, `blizzard` |
+| `data-weather-amount` | `0`–`1`, scaling that weather back toward clear |
+| `data-name` | What the title screen calls this map |
+
+Night grows a starfield and, on `night-full`, a moon; `night-new` has neither
+moon nor glow, just stars and however little light they give you. Rain and snow
+are one instanced quad recycled through a box around you, so a downpour costs a
+few thousand instances and no CPU. Fog is not drawn at all — thick air is the
+fog band closing in and the haze going grey, which is the same pair of shared
+uniforms the hour already writes to.
+
+### More than one world
+
+`world/maps.json` lists them:
+
+```json
+{ "default": "three-lands",
+  "maps": [ { "id": "lake", "name": "The lake at dusk", "file": "lake.svg" } ] }
+```
+
+Open **World** on the title screen to pick the map, and to override the hour and
+the weather the map asked for. All three are remembered, and all three can be
+forced from the URL:
+
+```
+http://localhost:8080/?map=whiteout&time=dusk&weather=fog
+```
+
+Changing any of them reloads the page. Rebaking the field and rebuilding every
+material in place would be a lot of machinery to get subtly wrong for something
+you do from a title screen; the choice is in `localStorage` by then, so the
+reload lands where you asked.
 
 On the `<svg>` element, `data-meters-per-unit` says how big a user unit is (1 metre by
 default) and `data-origin` says which unit is world `(0, 0)`. SVG *y* becomes world
@@ -152,15 +225,16 @@ you can read from a long way off, rather than somewhere you find by being shoved
 
 ### The minimap
 
-Press **`M`**, or start with `?map=1`, or call `wind.minimap.toggle()` from the console
-under `?debug=1`. It draws the regions straight out of the map — same colours, same
-orientation, holes and all — with a wedge for where you are and which way you are
-going, a ring at the point you start from, a circle for how far you can see, and a line
-underneath giving your coordinates, the region you are over, and how far the edge is.
-The wedge turns red while the headwind is turning you.
+Press **`M`**, or start with `?minimap=1`, or call `wind.minimap.toggle()` from the console
+under `?debug=1`. It draws the map straight out of the file — same colours, same
+orientation, lakes, holes and all, with the scatter shapes outlined — plus a wedge for
+where you are and which way you are going, a ring at the point you start from, a circle
+for how far you can see, and a line underneath giving your coordinates, the region you
+are over, and how far the edge is. The wedge turns red while the headwind is turning
+you.
 
 ```
-http://localhost:8080/?map=1&debug=1
+http://localhost:8080/?minimap=1&debug=1
 ```
 
 It is a DOM overlay, so like the rest of the DOM it is not there inside a headset
@@ -170,11 +244,26 @@ the headset it would want to be a world-space panel like `src/vrhud.js`.
 ### How a shape becomes ground
 
 The outlines are walked at 3 m intervals and baked, once at load, into a grid about
-6 m across per cell: altitude, waviness, the landscape mix, and the signed distance to
-the edge of the world. That grid goes to the GPU as two `RGBA16F` textures and stays in
-JS as the `Float32Array` they were made from, and both are sampled bilinearly at texel
-centres — so the ground the shader draws is the ground the collision uses. Baking
-`world.svg` takes about 300 ms, behind the title screen; the textures come to ~540 KB.
+6 m across per cell — eight numbers per cell, in two `RGBA16F` textures:
+
+```
+A   altitude   waviness   distance to the edge   water level
+B   meadow     dune       tundra                 wetness
+```
+
+That grid goes to the GPU as those two textures and stays in JS as the `Float32Array`
+they were made from, and both are sampled bilinearly at texel centres — so the ground
+the shader draws is the ground the collision uses. Everything but the last two channels
+is blurred by about 18 m, which is what makes a meadow run into sand instead of
+stepping into it; wetness is left crisp so a shoreline stays a shoreline.
+
+Baking takes 300–900 ms depending on how much outline a map has, behind the title
+screen. The textures come to well under a megabyte.
+
+Lighting works the same way, from the other end: `SUN`, `LIGHT`, `HAZE`, `FOG` and the
+sky colours in `config.js` are *the objects every material holds as its uniform value*,
+not constants copied into them. Moving the sun is a handful of writes rather than a
+walk over the scene graph, and there is no material that can be forgotten.
 
 ## Comfort & steering
 
@@ -227,17 +316,22 @@ already smooth, and lagging it would just feel like input lag.
 ```
 index.html          markup, import map, title screen
 styles/main.css
-world/world.svg     the map — every region you can fly in
+world/maps.json     the list of worlds
+world/*.svg         the worlds themselves
 src/
   main.js           renderer, XR session, settings wiring, animation loop
   game.js           player state and the per-frame update
-  regions.js        world.svg -> outlines -> the baked field grid
+  regions.js        a map's SVG -> outlines -> the baked field grid
+  maps.js           world/maps.json — which worlds there are
+  daylight.js       the hours and the weathers, written into the live uniforms
+  weather.js        rain and snow, one instanced quad in a box around you
+  props.js          trees and rocks, scattered from the map
   boundary.js       the headwind at the edge of the world
-  minimap.js        the debug map in the corner — M, or ?map=1
+  minimap.js        the debug map in the corner — M, or ?minimap=1
   turning.js        deadzone / curve / rate smoothing — all steering feel
   xrinput.js        Touch controller axes -> normalised -1..1
   input.js          keyboard, touch and pointer-lock
-  config.js         world constants, palette, quality tiers, defaults
+  config.js         world constants, the live light, quality tiers, defaults
   settings.js       localStorage + URL overrides
   field.js          the terrain function, in JS and GLSL — must stay in sync
   terrain.js  sky.js  grass.js  flowers.js  petals.js  vignette.js

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { terrainH, fieldAt, hills, hash2 } from './field.js';
-import { GRASS_MAX, QUALITY, PET_FULL, MAX_DOWN, SINK, DEG, LAND_HAZE } from './config.js';
+import { terrainH, fieldAt, heightOf, hash2 } from './field.js';
+import { GRASS_MAX, QUALITY, PET_FULL, MAX_DOWN, SINK, DEG } from './config.js';
 import { settings } from './settings.js';
 import { Turner, approach } from './turning.js';
 import { createBoundary, turnRate, pushSpeed, wrapAngle } from './boundary.js';
@@ -12,13 +12,22 @@ import { createFlyingPetals, createCarriedPetals } from './petals.js';
 import { createVignette } from './vignette.js';
 import { createVrHud } from './vrhud.js';
 import { createMinimap } from './minimap.js';
-import { chime, updateWind } from './audio.js';
+import { createProps } from './props.js';
+import { createWeather } from './weather.js';
+import { applyConditions, applyHaze, primeHaze } from './daylight.js';
+import { chime, updateWind, setWeatherSound } from './audio.js';
 import { readXRInput } from './xrinput.js';
 
 function forceOf(n) { return Math.min(1, n / PET_FULL); }
 function maxUp(f) { return (2 + f * 36) * DEG; }
 
-export function createGame({ renderer, scene, camera, rig, input, hud, world }) {
+export function createGame({ renderer, scene, camera, rig, input, hud, world, conditions }) {
+  // The hour and the weather are fixed for the life of a map — everything they
+  // touch is written into the shared uniforms once, here.
+  applyConditions(conditions);
+  primeHaze(conditions);
+  setWeatherSound(conditions.kind, conditions.fall);
+
   const sky = createSky();
   scene.add(sky.mesh);
   const terrain = createTerrain();
@@ -32,6 +41,9 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world }) 
   const vrHud = createVrHud(scene);
   const boundary = createBoundary(world);
   const minimap = createMinimap(world);
+  const props = createProps(scene, world);
+  const weather = createWeather(scene);
+  weather.set(conditions);
 
   const player = {
     pos: new THREE.Vector3(world.home.x, 0, world.home.z),
@@ -54,15 +66,15 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world }) 
   const yawE = new THREE.Euler(0, 0, 0, 'YXZ');
   const edge = { push: 0, beyond: 0, ix: 0, iz: 0 };
 
-  const haze = LAND_HAZE[0].clone();
-  const hazeWant = haze.clone();
-
   /* ------------------------------ presentation ---------------------------- */
   let foveationPending = false;
 
   function applyQuality() {
     const q = QUALITY[settings.quality] || QUALITY.medium;
-    grass.setDensity(renderer.xr.isPresenting ? q.grass : GRASS_MAX);
+    const inXR = renderer.xr.isPresenting;
+    grass.setDensity(inXR ? q.grass : GRASS_MAX);
+    props.setBudget(inXR ? q.props : 1.0);
+    weather.setCap(inXR ? q.drops : 1e9);
     foveationPending = true;
   }
 
@@ -195,15 +207,8 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world }) 
     // terrainH inline, because the same lookup also says which landscape this
     // is — and the sample it returns is only good until the next call.
     const f = fieldAt(player.pos.x, player.pos.z);
-    const gh = f[0] + f[1] * hills(player.pos.x, player.pos.z);
-    let sum = f[3] + f[4] + f[5];
-    if (sum < 1e-3) sum = 1;
-    hazeWant.setRGB(
-      (LAND_HAZE[0].r * f[3] + LAND_HAZE[1].r * f[4] + LAND_HAZE[2].r * f[5]) / sum,
-      (LAND_HAZE[0].g * f[3] + LAND_HAZE[1].g * f[4] + LAND_HAZE[2].g * f[5]) / sum,
-      (LAND_HAZE[0].b * f[3] + LAND_HAZE[1].b * f[4] + LAND_HAZE[2].b * f[5]) / sum
-    );
-    haze.lerp(hazeWant, 1 - Math.exp(-dt * 0.7));
+    const gh = heightOf(f, player.pos.x, player.pos.z);
+    applyHaze(conditions, f[4], f[5], f[6], f[7], 1 - Math.exp(-dt * 0.7));
 
     if (player.pos.y < gh + 0.55) player.pos.y = gh + 0.55;
     if (player.pos.y > gh + 90) player.pos.y = gh + 90;
@@ -225,16 +230,17 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world }) 
     grass.material.uniforms.uOrigin.value.set(Math.round(camPos.x), Math.round(camPos.z));
 
     /* ---- uniforms ---- */
-    terrain.setHaze(haze);
-    grass.setHaze(haze);
-    flowers.setHaze(haze);
-    sky.setHaze(haze);
     grass.material.uniforms.uCam.value.copy(camPos);
     grass.material.uniforms.uVel.value.copy(vel);
     grass.material.uniforms.uTime.value = elapsed;
     grass.material.uniforms.uForce.value = player.force;
     terrain.material.uniforms.uCam.value.copy(camPos);
+    terrain.material.uniforms.uTime.value = elapsed;
+    sky.set(conditions.time.stars, conditions.time.moon,
+      conditions.time.glow, conditions.time.glowAmt, elapsed);
     flowers.setUniforms(camPos, elapsed);
+    props.update(camPos, player.pos, elapsed, player.force);
+    weather.update(camPos, elapsed);
     carried.update(camPos, fwd, elapsed, player.speed, player.petals);
 
     /* ---- sound + hud ---- */
@@ -264,6 +270,6 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world }) 
 
   return {
     update, idle, begin, applyQuality, onSessionStart, onSessionEnd, player,
-    vrHud, minimap, isStarted: () => started,
+    vrHud, minimap, props, weather, conditions, isStarted: () => started,
   };
 }

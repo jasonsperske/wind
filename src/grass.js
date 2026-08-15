@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLSL_FIELD, fieldUniforms } from './field.js';
-import { SUN, HAZE, VIEW, GRASS_R, GRASS_MAX } from './config.js';
+import { SUN, LIGHT, HAZE, FOG, GRASS_R, GRASS_MAX } from './config.js';
 
 function bladeGeometry() {
   const segs = 4, pos = [], uvs = [], idx = [];
@@ -46,24 +46,27 @@ export function createGrass() {
       uCam: { value: new THREE.Vector3() },
       uVel: { value: new THREE.Vector3() },
       uTime: { value: 0 }, uForce: { value: 0 }, uRadius: { value: GRASS_R },
-      uSun: { value: SUN }, uHaze: { value: HAZE.clone() }, uView: { value: VIEW },
+      uSun: { value: SUN }, uLight: { value: LIGHT },
+      uHaze: { value: HAZE }, uFog: { value: FOG },
     }, fieldUniforms()),
     vertexShader: GLSL_FIELD + `
       attribute vec2 aOffset; attribute vec3 aRand;
-      uniform vec2 uOrigin; uniform vec3 uCam,uVel; uniform float uTime,uForce,uRadius;
+      uniform vec2 uOrigin, uFog; uniform vec3 uCam,uVel; uniform float uTime,uForce,uRadius;
       varying vec3 vCol; varying float vFog; varying float vBend;
       void main(){
         vec2 base = uOrigin + aOffset;
         float dist = length(base - uCam.xz);
         float edge = 1.0 - smoothstep(uRadius*0.70, uRadius, dist);
 
-        // one lookup, used for the ground height and for what grows on it
+        // one pair of lookups, for the ground height and for what grows on it
         vec4 f = fieldA(base);
-        float gh = f.x + f.y * hills(base);
-        vec3 lw = fieldLand(base);
+        vec4 b = fieldB(base);
+        float gh = heightOf(f, b.a, base);
+        vec3 lw = b.rgb;
         lw /= max(lw.x+lw.y+lw.z, 1e-3);
         // grass over the meadow, frozen tufts on the tundra, next to nothing on sand
         float cover = lw.x + lw.z*0.26 + lw.y*0.07;
+        cover *= 1.0 - clamp(b.a*1.6, 0.0, 1.0);      // and nothing at all in a lake
         // and it gives out before the ground does, so the edge is visible early
         float rim = smoothstep(-16.0, 1.0, f.z);
 
@@ -104,13 +107,16 @@ export function createGrass() {
         vCol = mix(dark, tip, t*0.9 + 0.1);
         vCol += vec3(0.30,0.34,0.22) * clamp(bl,0.0,1.2) * (0.25 + t*0.75);
         vBend = bl;
-        vFog = smoothstep(uRadius*0.38, uRadius*0.96, dist);
+        // the grass disc always fades at its own rim; thick weather closes in
+        // sooner than that, so take whichever hides more
+        vFog = max(smoothstep(uRadius*0.38, uRadius*0.96, dist),
+                   smoothstep(uFog.x, uFog.y, dist));
         gl_Position = projectionMatrix * viewMatrix * vec4(w,1.0);
       }`,
     fragmentShader: `
-      uniform vec3 uHaze; varying vec3 vCol; varying float vFog; varying float vBend;
+      uniform vec3 uHaze,uLight; varying vec3 vCol; varying float vFog; varying float vBend;
       void main(){
-        vec3 c = mix(vCol, uHaze, vFog);
+        vec3 c = mix(vCol * uLight, uHaze, vFog);
         gl_FragColor = vec4(c, 1.0);
       }`,
   });
@@ -121,6 +127,5 @@ export function createGrass() {
   return {
     mesh, material, geometry,
     setDensity(n) { geometry.instanceCount = Math.max(0, Math.min(GRASS_MAX, n | 0)); },
-    setHaze(c) { material.uniforms.uHaze.value.copy(c); },
   };
 }

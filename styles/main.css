@@ -31,11 +31,12 @@ button.primary:hover{background:#3e5344}
 button:focus-visible{outline:2px solid var(--petal);outline-offset:3px}
 button[hidden]{display:none}
 
-/* comfort & steering */
-#settings{width:min(26rem,86vw);text-align:left;font-size:.78rem;letter-spacing:.06em}
-#settings summary{cursor:pointer;text-align:center;letter-spacing:.18em;
+/* world, comfort & steering */
+#settings,#worldOpts{width:min(26rem,86vw);text-align:left;font-size:.78rem;letter-spacing:.06em}
+#settings summary,#worldOpts summary{cursor:pointer;text-align:center;letter-spacing:.18em;
   text-transform:uppercase;opacity:.6;padding:.4rem}
-#settings summary:hover{opacity:.9}
+#settings summary:hover,#worldOpts summary:hover{opacity:.9}
+.hint{margin:0;font-size:.68rem;opacity:.55;letter-spacing:.04em}
 .opts{display:flex;flex-direction:column;gap:.85rem;padding:1rem 1.1rem;margin-top:.5rem;
   border:1px solid rgba(44,58,49,.18);border-radius:1rem;background:rgba(255,255,255,.3)}
 .opts label{display:flex;flex-direction:column;gap:.35rem}
