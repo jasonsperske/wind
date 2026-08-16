@@ -5,7 +5,7 @@ import { settings } from './settings.js';
 import { Turner, approach } from './turning.js';
 import { createBoundary, turnRate, pushSpeed, wrapAngle } from './boundary.js';
 import { createSky } from './sky.js';
-import { createTerrain } from './terrain.js';
+import { createTerrain, TERRAIN_STEP } from './terrain.js';
 import { createGrass } from './grass.js';
 import { createFlowers } from './flowers.js';
 import { createFlyingPetals, createCarriedPetals } from './petals.js';
@@ -225,9 +225,12 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
     player.petals += flying.update(dt, camPos, elapsed);
 
     /* ---- follow-the-player geometry ---- */
-    terrain.mesh.position.set(Math.round(camPos.x / 2) * 2, 0, Math.round(camPos.z / 2) * 2);
+    // On a whole number of grid squares, so the vertices always land on the
+    // same world lattice and the hills hold still. The grass needs no such
+    // thing any more: its blades are pinned to the world by the shader.
+    terrain.mesh.position.set(Math.round(camPos.x / TERRAIN_STEP) * TERRAIN_STEP, 0,
+                              Math.round(camPos.z / TERRAIN_STEP) * TERRAIN_STEP);
     sky.mesh.position.copy(camPos);
-    grass.material.uniforms.uOrigin.value.set(Math.round(camPos.x), Math.round(camPos.z));
 
     /* ---- uniforms ---- */
     grass.material.uniforms.uCam.value.copy(camPos);
@@ -236,6 +239,9 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
     grass.material.uniforms.uForce.value = player.force;
     terrain.material.uniforms.uCam.value.copy(camPos);
     terrain.material.uniforms.uTime.value = elapsed;
+    // how high the wind is above its own ground — the ground shades itself as
+    // grass once the blades below have given out
+    terrain.material.uniforms.uAlt.value = camPos.y - gh;
     sky.set(conditions.time.stars, conditions.time.moon,
       conditions.time.glow, conditions.time.glowAmt, elapsed);
     flowers.setUniforms(camPos, elapsed);
@@ -261,6 +267,7 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
   function idle(dt) {
     elapsed += dt;
     grass.material.uniforms.uTime.value = elapsed;
+    terrain.material.uniforms.uTime.value = elapsed;   // the far hills keep moving too
     flowers.setTime(elapsed);
   }
 

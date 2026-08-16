@@ -138,6 +138,28 @@ none of it is stored. They sway in your gust as the grass does. **Nothing is
 solid** — you are wind, you go through the branches. Making them stop you would
 be a real change to how the game feels, so it is not in.
 
+### Grass, near and far
+
+Blades are instanced quads, and they belong to three lattices that repeat around
+you every 24, 48 and 88 metres. The shader draws whichever copy of a blade is
+nearest the camera, so a blade has a fixed place in the world and you fly over
+it — it is not a patch dragged along underneath you. Each lattice dies at its
+own rim, and the three overlapping give a thicket underfoot thinning to open
+field by 44 m. `GRASS_MAX` is the whole budget; trimming it for a headset thins
+all three in step.
+
+Past 44 m, or above about 26 m, there are no blades at all: a blade thinner than
+the pixel it lands in cannot be drawn, only flickered, and a hillside of those
+crawls when you move. The ground shades itself as grass instead — gust bands
+travelling downwind over a standing pattern of clumps, in `terrain.js`, off the
+same wind vector the blades lean along, so the two agree where they meet. Fly up
+and the field lies down into it rather than breaking into sparkle.
+
+The ground mesh follows you on a whole number of its own grid squares, for the
+same reason: land the vertices anywhere else and each hill is resampled at
+slightly different points every time it moves, which from the air looks exactly
+like the whole landscape swimming.
+
 ### The hour and the weather
 
 The `<svg>` element says what the map's weather is like:

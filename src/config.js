@@ -4,8 +4,15 @@ export const DEG = Math.PI / 180;
 
 /* --------------------------------- world -------------------------------- */
 export const VIEW = 110.0;          // fog / patch reach in clear weather
-export const GRASS_R = 62.0;        // radius of the grass disc that follows you
+// How far real blades are worth drawing. Past this the hillside is grass the
+// way a hillside is grass from a distance — a shaded, moving surface, painted
+// by terrain.js — so the radius buys density near you rather than reach.
+export const GRASS_R = 44.0;
 export const GRASS_MAX = 52000;     // blades on a desktop GPU
+
+// The prevailing wind. The blades lean along it and the gust bands on the far
+// hills run the same way, so near grass and far grass agree about the weather.
+export const WIND_DIR = new THREE.Vector2(0.82, 0.57).normalize();
 
 export const CELL = 11.0;           // flower grid spacing
 export const RING = 6;              // cells kept around the player
