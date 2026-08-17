@@ -122,6 +122,38 @@ npm run dev            # then open http://localhost:8080
 Drag anywhere (or move the mouse after clicking, which grabs the pointer) to steer,
 `WASD` / arrows to steer with the keyboard, `Shift` or two fingers to gust.
 
+## Publish it to GitHub Pages
+
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml) puts the game online on
+every push to `main`. There is no build step to run — the workflow copies `index.html`,
+`src/`, `styles/`, `vendor/` and `world/` into a `_site` directory and hands that to
+GitHub, leaving `scripts/`, `reference/` and this README behind. Every path in the game
+is relative, so it works from a project subpath like `https://you.github.io/wind/`
+without changing anything.
+
+Pages is served over HTTPS, which is all WebXR asks for: on a published copy the
+headset can open the URL in its own browser and tap **Enter headset** with no cable,
+no adb and no port forwarding. That is for playing. Keep `npm run quest` for
+developing, where you want the file you just edited and not the one that shipped.
+
+The repository needs to be told to accept the deploy once:
+
+1. Make sure the repository is **public**, or that the account has GitHub Pages on a
+   paid plan — Pages will not serve a private repository on the free plan.
+2. Go to **Settings → Pages**.
+3. Under **Build and deployment**, set **Source** to **GitHub Actions**. This is the
+   one that matters. The default, *Deploy from a branch*, ignores the workflow and
+   publishes raw files instead, and `actions/deploy-pages` fails against it.
+4. Push to `main`, or run the workflow by hand from **Actions → Publish to GitHub
+   Pages → Run workflow**.
+
+The first run creates a `github-pages` environment and prints the live URL — in the
+Actions run summary, on the `deploy` job, and afterwards at the top of Settings →
+Pages. If the run fails with a permissions error, check **Settings → Actions →
+General → Workflow permissions** allows Actions to run at all; the workflow asks for
+the `pages: write` and `id-token: write` scopes it needs on its own, so nothing else
+there has to change.
+
 ## Controls in the headset
 
 | Input | Does |
@@ -423,6 +455,7 @@ scripts/serve.js         dependency-free static server
 scripts/quest.js         adb reverse + serve
 reference/thewind.html   the original single-file prototype, kept for diffing
 docs/screenshot.jpg      the picture at the top of this README
+.github/workflows/pages.yml   publishes the game to GitHub Pages
 ```
 
 `field.js` holds the terrain height function twice, once in JS and once in GLSL.
