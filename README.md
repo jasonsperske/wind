@@ -92,6 +92,24 @@ If `adb connect` reports *connection refused*, adbd is not in TCP mode — the `
 step did not take, or the headset has rebooted since. If it reports *failed to
 authenticate*, the prompt is waiting for you inside the headset.
 
+### Shutting it down
+
+Ctrl-C in the `npm run quest` window is usually the whole story — it removes the
+reverse forward on its way out. If something exited less politely and the forward is
+still there (`adb reverse --list` will say), or you want the wireless connection gone
+too:
+
+```sh
+npm run unforward       # drop the :8080 reverse forward
+npm run unforward:all   # ...or every forward on the device
+npm run disconnect      # drop the Wi-Fi connection to the headset
+npm run quest:stop      # both of those, in one
+```
+
+None of it touches TCP mode on the headset. After `npm run disconnect`, a plain
+`adb connect 192.168.4.29:5555` picks the headset up again with no cable — only
+rebooting the headset undoes `adb tcpip 5555`.
+
 Editing a file and reloading in the headset is enough — nothing is cached and
 nothing is built.
 

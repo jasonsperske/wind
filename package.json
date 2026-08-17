@@ -9,7 +9,10 @@
     "quest": "node scripts/quest.js",
     "quest:open": "node scripts/quest.js --open",
     "forward": "adb reverse tcp:8080 tcp:8080",
-    "unforward": "adb reverse --remove tcp:8080"
+    "unforward": "adb reverse --remove tcp:8080",
+    "unforward:all": "adb reverse --remove-all",
+    "disconnect": "adb disconnect",
+    "quest:stop": "adb reverse --remove-all; adb disconnect"
   },
   "engines": {
     "node": ">=16"
