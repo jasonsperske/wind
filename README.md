@@ -12,7 +12,7 @@ weather, all of it. See [The world is an SVG](#the-world-is-an-svg). There are t
 pick from on the title screen.
 
 A WebXR toy: three.js, no build step, no dependencies to install. Runs in a desktop
-browser and in the Quest 2 browser over USB port forwarding.
+browser and in the Quest browser over adb port forwarding, by cable or over Wi-Fi.
 
 ## Run it on a Quest 2
 
@@ -51,6 +51,46 @@ npm run unforward      # when you are done
 ```
 
 Use a different port with `PORT=8081 npm run quest`.
+
+### Over Wi-Fi instead of the cable
+
+The cable is only needed once, to tell the headset to start listening for adb on the
+network. With it plugged in and `adb devices` showing the headset:
+
+```sh
+adb tcpip 5555                   # adbd restarts, listening on :5555
+                                 # ...now unplug the cable
+adb connect 192.168.4.29:5555    # your headset's address
+```
+
+The wireless connection is a separate transport and asks for its own authorisation, so
+put the headset on and accept the debugging prompt again — tick *Always allow from this
+computer*. `adb devices` should then show `192.168.4.29:5555   device`. The address is
+in the headset under Settings → Wi-Fi → your network, or on your router.
+
+Everything after that is unchanged. `adb reverse` is carried over the adb connection
+itself, so it does not care whether that connection is a cable or a network:
+
+```sh
+npm run quest:open
+```
+
+The headset still opens **http://localhost:8080**, and that is still a secure context —
+the reasoning in [Why localhost and not the LAN address](#why-localhost-and-not-the-lan-address)
+holds over Wi-Fi too. `http://192.168.4.29:8080` is still the wrong URL, even now that
+the headset can reach it.
+
+Two things worth knowing:
+
+- With the cable *and* the wireless connection both attached, adb sees two devices and
+  `adb reverse` fails with *more than one device/emulator*. Unplug the cable, or pin the
+  run to one of them: `ANDROID_SERIAL=192.168.4.29:5555 npm run quest`.
+- TCP mode does not survive rebooting the headset, and the address changes if the DHCP
+  lease does. Either one means plugging the cable back in for one more `adb tcpip 5555`.
+
+If `adb connect` reports *connection refused*, adbd is not in TCP mode — the `adb tcpip`
+step did not take, or the headset has rebooted since. If it reports *failed to
+authenticate*, the prompt is waiting for you inside the headset.
 
 Editing a file and reloading in the headset is enough — nothing is cached and
 nothing is built.
