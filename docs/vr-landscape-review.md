@@ -67,3 +67,14 @@ In VR, approach a tree head-on and from both sides at calm and boosted speed;
 check that the turn feels gradual, releases after passing, and does not affect
 flight above the canopy. Repeat in dense woodland and near the world boundary.
 Run the steering simulations with `node tests/treewind.test.js`.
+
+## Desert rocks
+
+Desert scatter now uses larger weathered sandstone forms with seeded slab/pillar
+proportions, ochre strata, fine seams that fade with distance, and pale dusty
+upper faces. Rocks elsewhere keep their neutral palette and original size range,
+but share the new closed faceted mesh. Rock geometry increases from 8 to 100
+triangles per instance; the existing rock instance cap and single draw call remain.
+
+Check the dunes at low and high altitude in VR: inspect silhouettes, rock-ground
+intersections on slopes, and sediment layers for shimmer while moving.

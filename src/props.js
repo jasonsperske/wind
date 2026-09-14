@@ -102,38 +102,47 @@ function treeGeometry() {
   return buildGeometry(pos, nrm, col, bend, idx);
 }
 
-// A lumpy boulder: an octahedron pushed about, flat-shaded.
+// Closed, shared rings give the rock a weathered shoulder and broken crown.
+// Vertices are expanded per face for faceted lighting, but adjoining faces
+// share the exact same positions (the old per-face jitter left cracks).
 function rockGeometry() {
-  const pts = [
-    [0, 1, 0], [0, -0.72, 0],
-    [1, 0.08, 0], [0, 0.02, 1], [-1, 0.10, 0], [0, 0.06, -1],
-  ];
-  const faces = [
-    [0, 2, 3], [0, 3, 4], [0, 4, 5], [0, 5, 2],
-    [1, 3, 2], [1, 4, 3], [1, 5, 4], [1, 2, 5],
-  ];
   const pos = [], nrm = [], col = [], bend = [];
-  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
-  const ab = new THREE.Vector3(), ac = new THREE.Vector3(), n = new THREE.Vector3();
-  for (let fi = 0; fi < faces.length; fi++) {
-    const f = faces[fi];
-    const v = f.map((k, i) => {
-      const p = pts[k];
-      const w = 0.86 + 0.28 * Math.abs(Math.sin(k * 3.7 + fi * 1.9 + i));
-      return [p[0] * w, p[1] * (0.72 + 0.20 * w), p[2] * w];
-    });
-    a.fromArray(v[0]); b.fromArray(v[1]); c.fromArray(v[2]);
-    ab.subVectors(b, a); ac.subVectors(c, a);
-    n.crossVectors(ab, ac).normalize();
-    const shade = 0.80 + 0.24 * (n.y * 0.5 + 0.5);
-    for (const p of v) {
-      pos.push(p[0], p[1], p[2]);
-      nrm.push(n.x, n.y, n.z);
-      col.push(0.42 * shade, 0.41 * shade, 0.38 * shade);
-      bend.push(0);
+  const rings = [], sides = 10;
+  const profile = [[-0.65,0.72],[-0.08,1.04],[0.43,0.91],[0.91,0.69],[1.18,0.40]];
+  for (let r=0; r<profile.length; r++) {
+    const [y,radius] = profile[r], ring = [];
+    for (let i=0; i<sides; i++) {
+      const a = i/sides*Math.PI*2;
+      const wear = 1 + Math.sin(a*3+0.7)*0.13 + Math.cos(a*5+r*0.6)*0.06;
+      ring.push(new THREE.Vector3(
+        Math.cos(a)*radius*wear + y*0.18,
+        y + Math.sin(a*2+0.4)*0.10*Math.max(y,0),
+        Math.sin(a)*radius*wear*0.83));
+    }
+    rings.push(ring);
+  }
+  const ab = new THREE.Vector3(), ac = new THREE.Vector3(), normal = new THREE.Vector3();
+  function face(a,b,c) {
+    normal.crossVectors(ab.subVectors(b,a),ac.subVectors(c,a)).normalize();
+    for (const v of [a,b,c]) {
+      pos.push(v.x,v.y,v.z); nrm.push(normal.x,normal.y,normal.z);
+      col.push(0.42,0.41,0.38); bend.push(0);
     }
   }
-  return buildGeometry(pos, nrm, col, bend, null);
+  for (let r=0; r<rings.length-1; r++) {
+    for (let i=0; i<sides; i++) {
+      const j=(i+1)%sides;
+      face(rings[r][i],rings[r+1][i],rings[r][j]);
+      face(rings[r][j],rings[r+1][i],rings[r+1][j]);
+    }
+  }
+  const top = new THREE.Vector3(0.24,1.22,0), bottom = new THREE.Vector3(0,-0.65,0);
+  for (let i=0; i<sides; i++) {
+    const j=(i+1)%sides;
+    face(rings[4][i],top,rings[4][j]);
+    face(rings[0][j],bottom,rings[0][i]);
+  }
+  return buildGeometry(pos,nrm,col,bend,null);
 }
 
 /* -------------------------------- drawing -------------------------------- */
@@ -146,12 +155,15 @@ function makeMaterial(sway) {
       uHaze: { value: HAZE }, uFog: { value: FOG },
       uCam: { value: new THREE.Vector3() }, uTime: { value: 0 },
       uForce: { value: 0 }, uSway: { value: sway },
+      uRock: { value: sway === 0 ? 1 : 0 },
     }, fieldUniforms()),
     vertexShader: `
       attribute vec3 aNrm, aCol; attribute float aBend;
-      attribute vec4 aPlace, aShape;
+      attribute vec4 aPlace, aShape; attribute float aLand;
       uniform vec3 uCam; uniform vec2 uFog; uniform float uTime, uForce, uSway;
+      uniform float uRock;
       varying vec3 vCol; varying vec3 vN; varying float vFog;
+      varying vec3 vRock; varying float vDesert, vDistance;
 
       // lean about x, then turn about y — a tree that only spins looks stamped
       vec3 shape(vec3 p, float lean, float cy, float sy){
@@ -163,8 +175,14 @@ function makeMaterial(sway) {
       void main(){
         float sc = aShape.x;
         float cy = cos(aShape.y), sy = sin(aShape.y);
-        vec3 p = shape(position * sc, aShape.z, cy, sy);
-        vN = normalize(shape(aNrm, aShape.z, cy, sy));
+        // Seeded slab / pillar proportions, without extra geometry or draws.
+        vec3 stretch = mix(vec3(1.0),vec3(1.1+aPlace.w*0.7,
+          0.85+fract(aPlace.w*7.3)*0.85,0.9+fract(aPlace.w*3.7)*0.4),uRock*aLand);
+        vec3 p = shape(position * stretch * sc, aShape.z, cy, sy);
+        vN = normalize(shape(aNrm/stretch, aShape.z, cy, sy));
+        vRock = position*stretch*sc;
+        vDesert = aLand*uRock;
+        vDistance = length(aPlace.xz-uCam.xz);
 
         vec3 base = vec3(aPlace.x, aPlace.y, aPlace.z);
 
@@ -192,9 +210,23 @@ function makeMaterial(sway) {
     fragmentShader: `
       uniform vec3 uSun,uLight,uHaze;
       varying vec3 vCol; varying vec3 vN; varying float vFog;
+      varying vec3 vRock; varying float vDesert, vDistance;
       void main(){
         float lam = max(dot(normalize(vN), uSun), 0.0)*0.66 + 0.44;
-        gl_FragColor = vec4(mix(vCol * lam * uLight, uHaze, vFog), 1.0);
+        vec3 colour = vCol;
+        if (vDesert > 0.001) {
+          float bed = vRock.y + sin(vRock.x*1.3+vRock.z*0.7)*0.13;
+          float strata = sin(bed*8.0)*0.5+0.5;
+          float detail = 1.0-smoothstep(12.0,55.0,vDistance);
+          float seam = pow(0.5+0.5*sin(bed*17.0),12.0)*detail;
+          vec3 sandstone = mix(vec3(0.43,0.22,0.115),vec3(0.72,0.48,0.27),strata*0.40+0.35);
+          sandstone *= 1.0-seam*0.18;
+          float dust = smoothstep(0.25,0.85,normalize(vN).y);
+          sandstone = mix(sandstone,vec3(0.82,0.65,0.41),dust*0.55);
+          sandstone *= mix(0.72,1.0,smoothstep(-0.2,0.9,vRock.y));
+          colour = mix(colour,sandstone,vDesert);
+        }
+        gl_FragColor = vec4(mix(colour * lam * uLight, uHaze, vFog), 1.0);
       }`,
   });
 }
@@ -208,6 +240,9 @@ function makeField(scene, geo, max, sway) {
 
   const aPlace = new THREE.InstancedBufferAttribute(new Float32Array(max * 4), 4);
   const aShape = new THREE.InstancedBufferAttribute(new Float32Array(max * 4), 4);
+  const aLand = new THREE.InstancedBufferAttribute(new Float32Array(max), 1);
+  aLand.setUsage(THREE.DynamicDrawUsage);
+  geometry.setAttribute('aLand', aLand);
   aPlace.setUsage(THREE.DynamicDrawUsage);
   aShape.setUsage(THREE.DynamicDrawUsage);
   geometry.setAttribute('aPlace', aPlace);
@@ -218,7 +253,7 @@ function makeField(scene, geo, max, sway) {
   const mesh = new THREE.Mesh(geometry, material);
   mesh.frustumCulled = false;
   scene.add(mesh);
-  return { geometry, material, mesh, aPlace, aShape };
+  return { geometry, material, mesh, aPlace, aShape, aLand };
 }
 
 export function createProps(scene, world) {
@@ -265,7 +300,10 @@ export function createProps(scene, world) {
         const s = hash2(i * 5.1 + k.kind, j * 7.3);
         const t = hash2(i + 11.3, j - 2.9 + k.kind);
         place[n * 4] = x; place[n * 4 + 1] = y; place[n * 4 + 2] = z; place[n * 4 + 3] = s;
-        shape[n * 4] = k.lo + s * (k.hi - k.lo);
+        const desert = f[5]/Math.max(f[4]+f[5]+f[6],0.001);
+        k.d.aLand.array[n] = desert;
+        shape[n * 4] = (k.lo + s * (k.hi - k.lo))
+          * (k.kind === 1 ? 1+desert*(0.65+s*0.65) : 1);
         shape[n * 4 + 1] = t * 6.2832;
         shape[n * 4 + 2] = (t - 0.5) * 0.20;
         shape[n * 4 + 3] = s;
@@ -280,6 +318,7 @@ export function createProps(scene, world) {
     k.d.geometry.instanceCount = n;
     k.d.aPlace.needsUpdate = true;
     k.d.aShape.needsUpdate = true;
+    k.d.aLand.needsUpdate = true;
   }
 
   function update(camPos, playerPos, elapsed, force) {
