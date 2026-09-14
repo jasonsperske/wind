@@ -53,3 +53,17 @@ second server. `npm run unforward` removes the forwarding after testing.
 
 Local checks: JavaScript syntax and desktop browser rendering. Actual headset
 performance, stereo comfort and controller regression checks remain for VR review.
+
+## Tree wind bypass
+
+Trees now anticipate your approach and gently steer/drift you around their
+canopy footprint, using the currently rendered tree set for each quality tier.
+A consistent passing side prevents head-on indecision. The comfort vignette
+follows the automatic turn; the map-edge wind retains priority. This is soft
+avoidance, not a solid collider or a guarantee against entering dense branches
+when steering into them. Rocks are unchanged.
+
+In VR, approach a tree head-on and from both sides at calm and boosted speed;
+check that the turn feels gradual, releases after passing, and does not affect
+flight above the canopy. Repeat in dense woodland and near the world boundary.
+Run the steering simulations with `node tests/treewind.test.js`.

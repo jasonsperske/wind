@@ -6,7 +6,7 @@
 // the map decide where the lattice is allowed to grow anything, and their
 // `data-density` thins it.
 //
-// Nothing here is solid. You are wind — you go through the branches.
+// Trees offer a soft wind bypass in game.js; rocks remain pass-through.
 
 import * as THREE from 'three';
 import { fieldUniforms, fieldAt, hills, hash2 } from './field.js';
@@ -235,6 +235,7 @@ export function createProps(scene, world) {
   // looking for it.
   const wanted = kinds.map((k) => world.scatters.some((s) => s.kind === k.kind));
   let budget = 1.0;
+  let trees = [];
 
   function rebuild(k, px, pz) {
     const ci = Math.round(px / k.cell), cj = Math.round(pz / k.cell);
@@ -244,6 +245,8 @@ export function createProps(scene, world) {
     const cap = Math.min(k.max, Math.max(0, Math.round(k.max * budget)));
     const place = k.d.aPlace.array, shape = k.d.aShape.array;
     let n = 0;
+    if (k.kind === 0) trees = [];
+    if (cap === 0) { k.d.geometry.instanceCount = 0; return; }
     outer:
     for (let i = ci - k.ring; i <= ci + k.ring; i++) {
       for (let j = cj - k.ring; j <= cj + k.ring; j++) {
@@ -266,6 +269,10 @@ export function createProps(scene, world) {
         shape[n * 4 + 1] = t * 6.2832;
         shape[n * 4 + 2] = (t - 0.5) * 0.20;
         shape[n * 4 + 3] = s;
+        if (k.kind === 0) {
+          const scale = shape[n*4];
+          trees.push({ id: i+','+j, x, y, z, radius: scale*1.35+0.6, height: scale*3.4 });
+        }
         n++;
         if (n >= cap) break outer;
       }
@@ -296,5 +303,12 @@ export function createProps(scene, world) {
     return kinds.map((k) => k.d.geometry.instanceCount);
   }
 
-  return { update, setBudget, counts };
+  // Rebuild before sampling so quality changes and cell crossings use exactly
+  // the same tree set as this frame's rendered instances.
+  function nearbyTrees(playerPos) {
+    if (wanted[0]) rebuild(kinds[0], playerPos.x, playerPos.z);
+    return trees;
+  }
+
+  return { update, setBudget, counts, nearbyTrees };
 }

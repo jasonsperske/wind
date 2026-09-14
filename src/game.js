@@ -5,6 +5,7 @@ import { settings } from './settings.js';
 import { Turner, approach } from './turning.js';
 import { createBoundary, turnRate, pushSpeed, wrapAngle } from './boundary.js';
 import { createSky } from './sky.js';
+import { createTreeWind } from './treewind.js';
 import { createTerrain, TERRAIN_STEP } from './terrain.js';
 import { createGrass } from './grass.js';
 import { createFlowers } from './flowers.js';
@@ -40,6 +41,8 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
   const vignette = createVignette(camera);
   const vrHud = createVrHud(scene);
   const boundary = createBoundary(world);
+  const treeWind = createTreeWind();
+  const treeFlow = { turn: 0, amount: 0, x: 0, z: 0 };
   const minimap = createMinimap(world);
   const props = createProps(scene, world);
   const weather = createWeather(scene);
@@ -147,6 +150,14 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
       turnBack = Math.abs(off) < most ? off : Math.sign(off) * most;
     }
 
+    // Read the current view in both desktop and XR, then lean around trees.
+    // The boundary keeps priority where woodland meets the map edge.
+    camera.getWorldDirection(fwd);
+    const treeHeading = Math.atan2(fwd.x, fwd.z);
+    treeWind(player.pos, treeHeading, player.speed, props.nearbyTrees(player.pos), dt, treeFlow);
+    const treeWeight = 1 - edge.push;
+    turnBack += treeFlow.turn * dt * treeWeight;
+
     /* ---- steering ---- */
     if (inXR) {
       tryFoveation();
@@ -174,7 +185,7 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
       rig.rotation.y = rigYaw;
     }
 
-    vignette.set(settings.vignette ? Math.max(turner.amount * 0.9, edge.push * 0.6) : 0);
+    vignette.set(settings.vignette ? Math.max(turner.amount * 0.9, edge.push * 0.6, treeFlow.amount * treeWeight * 0.7) : 0);
 
     /* ---- where the wind actually is ---- */
     placeRig(inXR);
@@ -195,6 +206,14 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
 
     vel.copy(fwd).multiplyScalar(player.speed);
     vel.y -= SINK;
+    const horizontalSpeed = Math.hypot(vel.x, vel.z);
+    vel.x += treeFlow.x * treeWeight;
+    vel.z += treeFlow.z * treeWeight;
+    const steeredSpeed = Math.hypot(vel.x, vel.z);
+    if (steeredSpeed > 0) {
+      vel.x *= horizontalSpeed / steeredSpeed;
+      vel.z *= horizontalSpeed / steeredSpeed;
+    }
     // and the headwind itself, so a nose held stubbornly outward still loses
     if (edge.push > 0) {
       const shove = pushSpeed(edge.push, edge.beyond);
