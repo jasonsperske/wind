@@ -9,6 +9,7 @@
 // Trees and boulders offer a soft wind bypass in game.js.
 
 import * as THREE from 'three';
+import { treeGeometry } from './trees.js';
 import { fieldUniforms, fieldAt, hills, hash2 } from './field.js';
 import { scatterAt } from './regions.js';
 import {
@@ -29,77 +30,6 @@ function buildGeometry(pos, nrm, col, bend, idx) {
   g.setAttribute('aBend', new THREE.Float32BufferAttribute(bend, 1));
   if (idx) g.setIndex(idx);
   return g;
-}
-
-// A trunk that tapers, and three canopy shells that overlap. Flat-shaded, and
-// the canopy carries a bend weight so the gust pushes the top of the tree
-// around without dragging the roots with it.
-function treeGeometry() {
-  const pos = [], nrm = [], col = [], bend = [], idx = [];
-  const bark = [0.29, 0.22, 0.15], barkTop = [0.36, 0.29, 0.19];
-
-  function push(x, y, z, nx, ny, nz, c, b) {
-    pos.push(x, y, z); nrm.push(nx, ny, nz); col.push(c[0], c[1], c[2]); bend.push(b);
-    return pos.length / 3 - 1;
-  }
-
-  const SIDES = 5, TRUNK = 1.35;
-  const ring0 = [], ring1 = [];
-  for (let i = 0; i < SIDES; i++) {
-    const a = (i / SIDES) * Math.PI * 2;
-    const cx = Math.cos(a), cz = Math.sin(a);
-    ring0.push(push(cx * 0.19, 0, cz * 0.19, cx, 0.15, cz, bark, 0));
-    ring1.push(push(cx * 0.10, TRUNK, cz * 0.10, cx, 0.15, cz, barkTop, 0.25));
-  }
-  for (let i = 0; i < SIDES; i++) {
-    const j = (i + 1) % SIDES;
-    idx.push(ring0[i], ring1[i], ring0[j], ring1[i], ring1[j], ring0[j]);
-  }
-
-  // Three lobes, stacked and offset, so the silhouette is lumpy rather than a
-  // cone. Two rings each rather than one equator — a single ring of points
-  // reads as a flat plate from the side, which is what a tree least looks like.
-  // Normals point out from the lobe's own centre, so the shading rounds off
-  // even though there are only a couple of dozen faces in it.
-  const SEG = 7;
-  const RINGS = [{ t: 0.46, r: 0.60 }, { t: -0.16, r: 1.0 }];
-  const shells = [
-    { y: 1.58, r: 1.02, h: 0.86, dx: 0.00, dz: 0.00, c: [0.20, 0.36, 0.17], b: 0.55 },
-    { y: 2.22, r: 0.84, h: 0.78, dx: 0.17, dz: -0.11, c: [0.26, 0.44, 0.20], b: 0.80 },
-    { y: 2.78, r: 0.58, h: 0.62, dx: -0.11, dz: 0.15, c: [0.33, 0.52, 0.24], b: 1.00 },
-  ];
-  for (const s of shells) {
-    const rings = [];
-    for (const R of RINGS) {
-      const ring = [];
-      for (let i = 0; i < SEG; i++) {
-        const a = (i / SEG) * Math.PI * 2;
-        const wob = 0.86 + 0.28 * (Math.sin(a * 3.1 + s.y * 5.0) * 0.5 + 0.5);
-        const rr = s.r * R.r * wob;
-        const x = s.dx + Math.cos(a) * rr;
-        const y = s.y + s.h * R.t;
-        const z = s.dz + Math.sin(a) * rr;
-        const nx = x - s.dx, ny = (y - s.y) * 1.4, nz = z - s.dz;
-        const nl = Math.hypot(nx, ny, nz) || 1;
-        const shade = 0.86 + 0.20 * (ny / nl * 0.5 + 0.5);
-        ring.push(push(x, y, z, nx / nl, ny / nl, nz / nl,
-          [s.c[0] * shade, s.c[1] * shade, s.c[2] * shade], s.b));
-      }
-      rings.push(ring);
-    }
-    const up = [s.c[0] * 1.20, s.c[1] * 1.20, s.c[2] * 1.20];
-    const dn = [s.c[0] * 0.58, s.c[1] * 0.58, s.c[2] * 0.58];
-    const top = push(s.dx, s.y + s.h, s.dz, 0, 1, 0, up, s.b);
-    const bot = push(s.dx, s.y - s.h * 0.80, s.dz, 0, -1, 0, dn, s.b * 0.7);
-    for (let i = 0; i < SEG; i++) {
-      const j = (i + 1) % SEG;
-      idx.push(rings[0][i], top, rings[0][j]);                      // cap
-      idx.push(rings[0][i], rings[0][j], rings[1][i]);              // side
-      idx.push(rings[0][j], rings[1][j], rings[1][i]);
-      idx.push(rings[1][j], bot, rings[1][i]);                      // underside
-    }
-  }
-  return buildGeometry(pos, nrm, col, bend, idx);
 }
 
 // Closed, shared rings give the rock a weathered shoulder and broken crown.
@@ -256,10 +186,23 @@ function makeField(scene, geo, max, sway) {
   return { geometry, material, mesh, aPlace, aShape, aLand };
 }
 
+function smooth(a,b,x) { const t=Math.max(0,Math.min(1,(x-a)/(b-a))); return t*t*(3-2*t); }
+function groveNoise(x,z) {
+  const i=Math.floor(x),j=Math.floor(z),u=smooth(0,1,x-i),v=smooth(0,1,z-j);
+  return (hash2(i,j)*(1-u)+hash2(i+1,j)*u)*(1-v)
+    +(hash2(i,j+1)*(1-u)+hash2(i+1,j+1)*u)*v;
+}
+
 export function createProps(scene, world) {
+  const treeModels = [0,1,2].map(type => {
+    const geo=treeGeometry(type), box=geo.boundingBox;
+    const radius=Math.hypot(Math.max(Math.abs(box.min.x),Math.abs(box.max.x)),
+      Math.max(Math.abs(box.min.z),Math.abs(box.max.z)));
+    return { draw:makeField(scene,geo,TREE_MAX,1.0), radius, height:box.max.y };
+  });
   const kinds = [
-    { d: makeField(scene, treeGeometry(), TREE_MAX, 1.0), kind: 0,
-      cell: TREE_CELL, ring: TREE_RING, max: TREE_MAX, lo: 1.5, hi: 3.1,
+    { d: treeModels[0].draw, draws:treeModels.map(m=>m.draw), kind: 0,
+      cell: 11, ring: Math.ceil(TREE_CELL*TREE_RING/11), max: TREE_MAX, lo: 1.25, hi: 2.4,
       lastI: 1e9, lastJ: 1e9 },
     { d: makeField(scene, rockGeometry(), ROCK_MAX, 0.0), kind: 1,
       cell: ROCK_CELL, ring: ROCK_RING, max: ROCK_MAX, lo: 0.5, hi: 1.7,
@@ -279,12 +222,9 @@ export function createProps(scene, world) {
     k.lastI = ci; k.lastJ = cj;
 
     const cap = Math.min(k.max, Math.max(0, Math.round(k.max * budget)));
-    const place = k.d.aPlace.array, shape = k.d.aShape.array;
-    let n = 0;
+    const draws=k.draws || [k.d], counts=draws.map(()=>0), candidates=[];
     const nearby = obstaclesByKind[k.kind] = [];
     obstaclesDirty = true;
-    if (cap === 0) { k.d.geometry.instanceCount = 0; return; }
-    outer:
     for (let i = ci - k.ring; i <= ci + k.ring; i++) {
       for (let j = cj - k.ring; j <= cj + k.ring; j++) {
         const keep = hash2(i * 1.7 + k.kind * 31.3, j * 2.3 - k.kind * 17.1);
@@ -292,7 +232,10 @@ export function createProps(scene, world) {
         const jz = (hash2(i - 3.9, j + 1.13 + k.kind) - 0.5) * k.cell * 0.86;
         const x = i * k.cell + jx, z = j * k.cell + jz;
 
-        const density = scatterAt(world, k.kind, x, z);
+        let density = scatterAt(world, k.kind, x, z);
+        // Smooth world-space patches leave clearings between uneven groves.
+        const grove = groveNoise(x/42,z/42);
+        if(k.kind===0) density *= 0.12+0.88*smooth(0.28,0.70,grove);
         if (density <= 0 || keep > density) continue;
 
         const f = fieldAt(x, z);
@@ -301,9 +244,20 @@ export function createProps(scene, world) {
 
         const s = hash2(i * 5.1 + k.kind, j * 7.3);
         const t = hash2(i + 11.3, j - 2.9 + k.kind);
-        place[n * 4] = x; place[n * 4 + 1] = y; place[n * 4 + 2] = z; place[n * 4 + 3] = s;
-        const desert = f[5]/Math.max(f[4]+f[5]+f[6],0.001);
-        k.d.aLand.array[n] = desert;
+        candidates.push({i,j,x,y,z,s,t,desert:f[5]/Math.max(f[4]+f[5]+f[6],0.001),
+          type:k.kind===0 ? Math.min(2,Math.floor((groveNoise(x/65+31,z/65-17)*0.72+s*0.28)*3)) : 0});
+      }
+    }
+    // Prioritise nearby trees across all species under one shared budget.
+    // Cell-centred sorting is stable until the next lattice rebuild.
+    candidates.sort((a,b)=>Math.hypot(a.x-ci*k.cell,a.z-cj*k.cell)-Math.hypot(b.x-ci*k.cell,b.z-cj*k.cell));
+    for(const candidate of candidates.slice(0,cap)) {
+        const {i,j,x,y,z,s,t,type}=candidate;
+        const d=draws[type], n=counts[type]++;
+        const place=d.aPlace.array, shape=d.aShape.array;
+        place[n*4]=x;place[n*4+1]=y;place[n*4+2]=z;place[n*4+3]=s;
+        const desert = candidate.desert;
+        d.aLand.array[n] = desert;
         shape[n * 4] = (k.lo + s * (k.hi - k.lo))
           * (k.kind === 1 ? 1+desert*(0.65+s*0.65) : 1);
         shape[n * 4 + 1] = t * 6.2832;
@@ -311,7 +265,10 @@ export function createProps(scene, world) {
         shape[n * 4 + 3] = s;
         if (k.kind === 0) {
           const scale = shape[n*4];
-          nearby.push({ id: 'tree:'+i+','+j, x, y, z, radius: scale*1.35+0.6, height: scale*3.4 });
+          const model=treeModels[type];
+          nearby.push({ id: 'tree:'+i+','+j, x, y, z,
+            radius: scale*(model.radius+model.height*0.1+0.85)+0.6,
+            height: scale*(model.height+model.radius*0.1) });
         } else {
           // Conservative envelope of the mesh, including its seeded stretch
           // and lean. Keep these stretch factors aligned with makeMaterial.
@@ -323,24 +280,23 @@ export function createProps(scene, world) {
             radius: scale*(1.4*Math.max(sx,sz)+0.14*sy)+0.6,
             height: scale*(1.35*sy+0.15*Math.max(sx,sz)) });
         }
-        n++;
-        if (n >= cap) break outer;
-      }
     }
-    k.d.geometry.instanceCount = n;
-    k.d.aPlace.needsUpdate = true;
-    k.d.aShape.needsUpdate = true;
-    k.d.aLand.needsUpdate = true;
+    draws.forEach((d,type)=>{
+      d.geometry.instanceCount=counts[type];
+      d.aPlace.needsUpdate=d.aShape.needsUpdate=d.aLand.needsUpdate=true;
+    });
   }
 
   function update(camPos, playerPos, elapsed, force) {
     for (const k of kinds) {
       if (!wanted[k.kind]) continue;
       rebuild(k, playerPos.x, playerPos.z);
-      const u = k.d.material.uniforms;
-      u.uCam.value.copy(camPos);
-      u.uTime.value = elapsed;
-      u.uForce.value = force;
+      for (const d of k.draws || [k.d]) {
+        const u = d.material.uniforms;
+        u.uCam.value.copy(camPos);
+        u.uTime.value = elapsed;
+        u.uForce.value = force;
+      }
     }
   }
 
@@ -351,7 +307,7 @@ export function createProps(scene, world) {
   }
 
   function counts() {
-    return kinds.map((k) => k.d.geometry.instanceCount);
+    return kinds.map((k) => (k.draws || [k.d]).reduce((sum,d)=>sum+d.geometry.instanceCount,0));
   }
 
   // Rebuild before sampling so quality changes and cell crossings use exactly

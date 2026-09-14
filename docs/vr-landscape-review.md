@@ -82,3 +82,24 @@ intersections on slopes, and sediment layers for shimmer while moving.
 
 Repeat the bypass checks with the largest desert boulders at calm and boosted
 speed, and fly over their tops to check the height cutoff.
+
+## Mixed woodland
+
+Trees now include rounded branching oaks (768 triangles), slender forked birches
+(796), and layered pines (358). Three instanced tree draws replace one; the total
+tree count remains capped at 150 and is reduced by the existing quality budget.
+There are no new textures or transparent leaf cards.
+
+Broad deterministic density patches produce groves and clearings within the SVG
+woodland boundaries. Species cluster loosely; tree positions, sizes and species
+remain stable on return. The nearest candidates share one budget across species.
+Wind bounds use each model's dimensions, with allowance for lean and sway.
+
+Review dense groves in VR for frame rate and comfort during tree bypasses.
+Check all three species close up, gust past the crowns, and revisit a grove to
+check placement stability. Automated geometry/budget/placement checks run with:
+
+```sh
+node --experimental-loader ./tests/three-loader.mjs tests/woodland.test.js
+node tests/propwind.test.js
+```
