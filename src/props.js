@@ -6,7 +6,7 @@
 // the map decide where the lattice is allowed to grow anything, and their
 // `data-density` thins it.
 //
-// Trees offer a soft wind bypass in game.js; rocks remain pass-through.
+// Trees and boulders offer a soft wind bypass in game.js.
 
 import * as THREE from 'three';
 import { fieldUniforms, fieldAt, hills, hash2 } from './field.js';
@@ -270,7 +270,8 @@ export function createProps(scene, world) {
   // looking for it.
   const wanted = kinds.map((k) => world.scatters.some((s) => s.kind === k.kind));
   let budget = 1.0;
-  let trees = [];
+  const obstaclesByKind = [[], []];
+  let obstacles = [], obstaclesDirty = true;
 
   function rebuild(k, px, pz) {
     const ci = Math.round(px / k.cell), cj = Math.round(pz / k.cell);
@@ -280,7 +281,8 @@ export function createProps(scene, world) {
     const cap = Math.min(k.max, Math.max(0, Math.round(k.max * budget)));
     const place = k.d.aPlace.array, shape = k.d.aShape.array;
     let n = 0;
-    if (k.kind === 0) trees = [];
+    const nearby = obstaclesByKind[k.kind] = [];
+    obstaclesDirty = true;
     if (cap === 0) { k.d.geometry.instanceCount = 0; return; }
     outer:
     for (let i = ci - k.ring; i <= ci + k.ring; i++) {
@@ -309,7 +311,17 @@ export function createProps(scene, world) {
         shape[n * 4 + 3] = s;
         if (k.kind === 0) {
           const scale = shape[n*4];
-          trees.push({ id: i+','+j, x, y, z, radius: scale*1.35+0.6, height: scale*3.4 });
+          nearby.push({ id: 'tree:'+i+','+j, x, y, z, radius: scale*1.35+0.6, height: scale*3.4 });
+        } else {
+          // Conservative envelope of the mesh, including its seeded stretch
+          // and lean. Keep these stretch factors aligned with makeMaterial.
+          const scale = shape[n*4], seed = place[n*4+3];
+          const sx = 1 + desert*(0.1+seed*0.7);
+          const sy = 1 + desert*(-0.15+(seed*7.3%1)*0.85);
+          const sz = 1 + desert*(-0.1+(seed*3.7%1)*0.4);
+          nearby.push({ id: 'rock:'+i+','+j, x, y, z,
+            radius: scale*(1.4*Math.max(sx,sz)+0.14*sy)+0.6,
+            height: scale*(1.35*sy+0.15*Math.max(sx,sz)) });
         }
         n++;
         if (n >= cap) break outer;
@@ -343,11 +355,15 @@ export function createProps(scene, world) {
   }
 
   // Rebuild before sampling so quality changes and cell crossings use exactly
-  // the same tree set as this frame's rendered instances.
-  function nearbyTrees(playerPos) {
-    if (wanted[0]) rebuild(kinds[0], playerPos.x, playerPos.z);
-    return trees;
+  // the same obstacle set as this frame's rendered instances.
+  function nearbyObstacles(playerPos) {
+    for (const k of kinds) if (wanted[k.kind]) rebuild(k, playerPos.x, playerPos.z);
+    if (obstaclesDirty) {
+      obstacles = obstaclesByKind[0].concat(obstaclesByKind[1]);
+      obstaclesDirty = false;
+    }
+    return obstacles;
   }
 
-  return { update, setBudget, counts, nearbyTrees };
+  return { update, setBudget, counts, nearbyObstacles };
 }
