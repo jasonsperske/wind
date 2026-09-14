@@ -9,12 +9,17 @@ until the headset review passes.
   These are panoramic background scenery, not new flyable terrain.
 - Slow procedural cloud banks, lit by the selected hour, and weather-dependent
   mountain visibility. Clouds also animate on the title screen.
-- Tapered, slightly taller grass with a steady lean, coherent gust fronts and
-  small crosswind arcs.
+- Fine tapered grass with a steady lean, coherent gust fronts, small crosswind
+  arcs, shaded roots and sunlit tips. More of the existing instance budget goes
+  to the nearest ring. Ground gusts share the blades' main wave.
+- Cupped teardrop flower and carried-petal meshes, with larger blooms and
+  gentle colour gradients.
 - Per-fragment water ripple normals, broad sky/cloud reflections, softer distant
   highlights and a subtle shoreline pattern. Water remains at its collision height.
 
-The changes add shader work but no geometry, draw calls, textures or dependencies.
+The changes add shader work and finer petal meshes, but no extra draw calls,
+textures or dependencies. Each petal uses 32 triangles instead of two; grass
+keeps its existing vertex and instance budgets.
 Existing Quest quality settings still control the grass instance budget. Reflections
 approximate the sky; they do not capture trees, petals or mountain silhouettes.
 

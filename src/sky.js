@@ -20,7 +20,7 @@ export function createSky(conditions) {
     uGlow: { value: 0.45 },
     uLight: { value: LIGHT },
     uVisibility: { value: conditions.view },
-    uCloud: { value: 0.38 + conditions.damp * 0.9 },
+    uCloud: { value: 0.16 + conditions.damp * 1.2 },
   };
 
   const sky = new THREE.Mesh(
@@ -95,6 +95,10 @@ export function createSky(conditions) {
           }
 
           c += uSunCol * pow(max(sd, 0.0), uSky.z) * uGlow;
+          if (uSky.x < 0.5) {
+            float sunDisc = smoothstep(0.99988,0.99996,sd);
+            c += uSunCol*(sunDisc*1.4+pow(max(sd,0.0),180.0)*0.14)*uVisibility;
+          }
 
           // Broad, slow cloud banks and feathered high cloud. Fade the
           // projection before the horizon; no rapidly shrinking cloud pixels.

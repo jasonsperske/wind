@@ -3,12 +3,29 @@ import { terrainH, fieldAt, hash2, GLSL_HSV } from './field.js';
 import { HAZE, FOG, LIGHT, SUN, CELL, RING, FMAX, PET_PER } from './config.js';
 
 export function petalGeometry() {
-  // a lozenge, base at origin, pointing +Y
+  // A cupped teardrop with a raised centre vein. The shared shape also
+  // gives carried petals a curved silhouette instead of a four-corner card.
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(
-    [0, 0, 0, -0.5, 0.42, 0, 0.5, 0.42, 0, 0, 1, 0], 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute([0.5, 0, 0, 0.42, 1, 0.42, 0.5, 1], 2));
-  g.setIndex([0, 1, 2, 1, 3, 2]);
+  const pos = [], uv = [], indices = [];
+  const rows = 8;
+  for (let i=0; i<=rows; i++) {
+    const t = i/rows;
+    const width = Math.pow(Math.sin(Math.PI*t),0.75)*0.46;
+    for (let j=0; j<3; j++) {
+      const across = j-1;
+      pos.push(across*width,t,Math.sin(t*Math.PI)*0.10+across*across*width*0.22);
+      uv.push(j/2,t);
+    }
+  }
+  for (let i=0; i<rows; i++) {
+    for (let j=0; j<2; j++) {
+      const a = i*3+j;
+      indices.push(a,a+1,a+3,a+1,a+4,a+3);
+    }
+  }
+  g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  g.setIndex(indices);
   return g;
 }
 
@@ -44,9 +61,9 @@ function buildHeads() {
       varying vec3 vCol; varying float vFog;
       void main(){
         float b = aBloom;
-        float len = 0.15 + b*0.13;
-        float wid = 0.10 + b*0.05;
-        vec3 p = vec3(position.x*wid, position.y*len, 0.0);
+        float len = 0.19 + b*0.17;
+        float wid = 0.12 + b*0.09;
+        vec3 p = vec3(position.x*wid, position.y*len, position.z*len);
         // pitch: nearly upright when a bud, fanned when open
         float pit = mix(0.16, 1.16, b) + sin(uTime*1.3 + aSpin*3.0)*0.05*b;
         float cp = cos(pit), sp = sin(pit);

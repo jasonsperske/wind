@@ -81,7 +81,7 @@ export function createTerrain() {
         float along  = dot(vW.xz, uWind);
         float across = dot(vW.xz, vec2(-uWind.y, uWind.x));
         float sharp = 1.0 - smoothstep(30.0, 90.0, dxz);   // the fine octave aliases first
-        float wave = (vnoise(vec2(along*0.085 - uTime*0.55, across*0.045)) - 0.5)
+        float wave = sin(along*0.14-uTime*0.85+sin(across*0.10)*0.65)*0.38
                    + (vnoise(vec2(along*0.260 - uTime*1.10, across*0.160)) - 0.5)*0.5*sharp;
         float clump = (vnoise(vW.xz*0.55) - 0.5)
                     + (vnoise(vW.xz*1.90) - 0.5)*0.5*sharp;
@@ -102,8 +102,8 @@ export function createTerrain() {
         // height above this region's own floor, not above the world's
         float rise = smoothstep(3.0, 11.0, vW.y - vBase);
 
-        vec3 meadow = mix(vec3(0.20,0.33,0.14), vec3(0.33,0.44,0.17), m);
-        meadow = mix(meadow, vec3(0.42,0.47,0.24), rise*0.55);
+        vec3 meadow = mix(vec3(0.105,0.22,0.065), vec3(0.28,0.39,0.105), m);
+        meadow = mix(meadow, vec3(0.40,0.46,0.19), rise*0.55);
 
         float rip = sin(vW.x*0.196 + vW.z*0.121 + m*3.0)*0.5+0.5;
         vec3 dune = mix(vec3(0.70,0.56,0.35), vec3(0.93,0.84,0.61), rip*0.5 + rise*0.5);

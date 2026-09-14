@@ -12,7 +12,7 @@ import { SUN, LIGHT, HAZE, FOG, GRASS_R, GRASS_MAX, WIND_DIR } from './config.js
 // three, each dying at its own rim, gives the density falloff back.
 // r = how far this lattice reaches, d = blades per square metre it contributes.
 const RINGS = [
-  { r: 12.0,    d: 12.0 },
+  { r: 12.0,    d: 24.0 },
   { r: 24.0,    d: 4.0 },
   { r: GRASS_R, d: 4.5 },
 ];
@@ -20,7 +20,7 @@ const RINGS = [
 function bladeGeometry() {
   const segs = 4, pos = [], uvs = [], idx = [];
   for (let i = 0; i <= segs; i++) {
-    const t = i / segs, w = 0.044 * Math.pow(1.0 - t, 0.7) + 0.001;
+    const t = i / segs, w = 0.026 * Math.pow(1.0 - t, 1.1) + 0.0006;
     pos.push(-w, t, 0, w, t, 0);
     uvs.push(0, t, 1, t);
   }
@@ -79,7 +79,7 @@ export function createGrass() {
     }, fieldUniforms()),
     vertexShader: GLSL_FIELD + `
       attribute vec2 aOffset; attribute vec3 aRand; attribute float aTile;
-      uniform vec2 uFog, uWind; uniform vec3 uCam,uVel; uniform float uTime,uForce,uRadius;
+      uniform vec2 uFog, uWind; uniform vec3 uCam,uVel,uSun; uniform float uTime,uForce,uRadius;
       varying vec3 vCol; varying float vFog; varying float vBend;
       void main(){
         // The copy of this blade's lattice nearest the camera. Nothing here
@@ -108,7 +108,7 @@ export function createGrass() {
         float alt = max(uCam.y - gh, 0.0);
         float lift = 1.0 - smoothstep(8.0, 26.0, alt);
 
-        float H = (0.58 + aRand.x*0.84) * edge * cover * rim * lift;
+        float H = (0.48 + aRand.x*0.64) * edge * cover * rim * lift;
         float t = uv.y;
         vec3 p = position;
         // The same argument sideways: a blade narrower than the pixel it lands
@@ -124,7 +124,7 @@ export function createGrass() {
         // travelling downwind at the same speed, so the two agree at the seam
         float along = dot(base, uWind), across = dot(base, vec2(-uWind.y, uWind.x));
         float front = sin(along*0.14 - uTime*0.85 + sin(across*0.10)*0.65);
-        float sway = 0.20 + front*0.13
+        float sway = 0.32 + front*0.20
                    + sin(along*0.43-uTime*1.5+aRand.z*1.5)*0.045;
         vec2 bend = uWind * sway;
         // A small crosswind lets the tips trace soft arcs rather than flap.
@@ -146,14 +146,21 @@ export function createGrass() {
 
         vec3 w = vec3(base.x + p.x, gh + p.y, base.y + p.z);
         vec3 dark = vec3(0.10,0.23,0.12);
-        vec3 tip  = mix(vec3(0.38,0.56,0.23), vec3(0.62,0.68,0.35), aRand.x);
+        vec3 tip  = mix(vec3(0.32,0.49,0.12), vec3(0.53,0.64,0.22), aRand.x);
         // straw where the ground turns to sand, grey sage where it freezes
         dark = mix(dark, vec3(0.35,0.29,0.16), lw.y);
         tip  = mix(tip,  vec3(0.80,0.70,0.45), lw.y);
         dark = mix(dark, vec3(0.28,0.34,0.33), lw.z);
         tip  = mix(tip,  vec3(0.63,0.71,0.70), lw.z);
         vCol = mix(dark, tip, t*0.9 + 0.1);
-        vCol += vec3(0.30,0.34,0.22) * clamp(bl,0.0,1.2) * (0.25 + t*0.75);
+        // Rounded blade lighting and backlit tips give the field depth.
+        vec3 normal = normalize(vec3(-sn,0.28+bl*0.35,cs));
+        float diffuse = abs(dot(normal,uSun));
+        vec3 eye = normalize(uCam-w);
+        float through = pow(max(dot(-eye,uSun),0.0),3.0);
+        vCol *= 0.62 + diffuse*0.48;
+        vCol += vec3(0.24,0.30,0.055)*through*t*t;
+        vCol *= 0.78 + 0.22*smoothstep(0.0,0.65,t);
         // A pale tip on dark ground is a bright dot once it is a pixel wide, and
         // a field of bright dots crawls. Far blades give their tips back up.
         vCol = mix(vCol, dark*1.2, smoothstep(uRadius*0.42, uRadius, dist)*0.55);
