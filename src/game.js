@@ -28,7 +28,7 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
   primeHaze(conditions);
   setWeatherSound(conditions.kind, conditions.fall);
 
-  const sky = createSky();
+  const sky = createSky(conditions);
   scene.add(sky.mesh);
   const terrain = createTerrain();
   scene.add(terrain.mesh);
@@ -269,6 +269,8 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
     grass.material.uniforms.uTime.value = elapsed;
     terrain.material.uniforms.uTime.value = elapsed;   // the far hills keep moving too
     flowers.setTime(elapsed);
+    sky.set(conditions.time.stars, conditions.time.moon,
+      conditions.time.glow, conditions.time.glowAmt, elapsed);
   }
 
   // place the rig and fill the uniforms before the first frame

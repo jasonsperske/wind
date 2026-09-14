@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLSL_FIELD, fieldUniforms } from './field.js';
-import { SUN, LIGHT, HAZE, FOG, GRASS_R, WIND_DIR } from './config.js';
+import { SUN, LIGHT, HAZE, FOG, GRASS_R, WIND_DIR, SKY_TOP, SKY_LOW, SUN_COL } from './config.js';
 
 // The ground follows you, and it is a grid, so it has to be re-centred on a
 // multiple of its own spacing — land the vertices anywhere else and every hill
@@ -18,6 +18,7 @@ export function createTerrain() {
     // uSun / uLight / uHaze / uFog are the live objects out of config.js, so
     // the hour and the weather reach every material without being passed down.
     uniforms: Object.assign({
+      uSkyTop: { value: SKY_TOP }, uSkyLow: { value: SKY_LOW }, uSunCol: { value: SUN_COL },
       uSun: { value: SUN }, uLight: { value: LIGHT },
       uHaze: { value: HAZE }, uFog: { value: FOG },
       uCam: { value: new THREE.Vector3() }, uTime: { value: 0 },
@@ -40,21 +41,13 @@ export function createTerrain() {
         vEdge = f.z;            // metres to the edge of the world, negative outside
         vWet = b.a;
         vL = b.rgb;
-        // A lake is dead flat, so it needs a normal of its own or it reads as
-        // painted concrete. Ripple the normal, not the vertex — the surface you
-        // skim along should stay exactly where the collision thinks it is.
-        if (vWet > 0.02) {
-          float a = w.x*0.90 + uTime*1.5;
-          float b2 = w.z*0.75 - uTime*1.1;
-          vec3 wn = normalize(vec3(-cos(a)*0.042, 1.0, sin(b2)*0.036));
-          vN = normalize(mix(vN, wn, clamp(vWet, 0.0, 1.0)));
-        }
         vW = w;
         gl_Position = projectionMatrix * viewMatrix * vec4(w,1.0);
       }`,
     fragmentShader: `
       uniform vec3 uSun,uLight,uHaze,uCam; uniform vec2 uFog,uWind;
       uniform float uTime,uGrassR,uAlt;
+      uniform vec3 uSkyTop,uSkyLow,uSunCol;
       varying vec3 vW; varying vec3 vN; varying vec3 vL;
       varying float vBase; varying float vEdge; varying float vWet;
 
@@ -130,20 +123,40 @@ export function createTerrain() {
         float glint = pow(max(dot(n, uSun), 0.0), 9.0) * lw.z * 0.55;
         vec3 c = base*lam + vec3(0.85,0.92,1.0)*glint;
 
-        // water: darker, bluer, and it holds a real highlight
+        c *= uLight;
+        // Analytic ripple normals stay smooth between terrain vertices. Fade
+        // fine ripples with distance to avoid headset shimmer. The lake's
+        // geometry stays level, matching the surface used by flight collision.
         if (vWet > 0.001) {
-          vec3 eye = normalize(uCam - vW);
-          vec3 h = normalize(eye + uSun);
-          float spec = pow(max(dot(n, h), 0.0), 90.0);
-          float fres = pow(1.0 - max(dot(n, eye), 0.0), 3.0);
-          vec3 deep = vec3(0.09,0.20,0.27), shallow = vec3(0.20,0.40,0.46);
-          vec3 wc = mix(deep, shallow, m) * (0.55 + lam*0.45);
-          wc = mix(wc, uHaze, fres*0.55);        // glancing angles turn to sky
-          wc += vec3(1.0,0.98,0.92) * spec * 1.3;
-          c = mix(c, wc, clamp(vWet, 0.0, 1.0));
+          vec3 eye = normalize(cameraPosition - vW);
+          float detail = 1.0-smoothstep(12.0,65.0,dxz);
+          float wa = along*0.58-uTime*0.85+sin(across*0.19)*0.65;
+          float wb = across*0.81+along*0.24-uTime*0.63;
+          float fine = sin(along*2.4+across*1.7-uTime*1.7)*0.025*detail;
+          vec2 tilt = uWind*(cos(wa)*0.065+fine)
+                    + vec2(-uWind.y,uWind.x)*cos(wb)*0.045;
+          vec3 wn = normalize(vec3(tilt.x,1.0,tilt.y));
+          vec3 reflected = reflect(-eye,wn);
+          float fres = 0.08+0.92*pow(1.0-max(dot(wn,eye),0.0),4.0);
+          vec3 reflection = mix(uSkyLow,uSkyTop,smoothstep(0.0,0.8,reflected.y));
+          vec2 cloudUV = reflected.xz/max(reflected.y+0.18,0.12)*2.6
+                       + vec2(uTime*0.007,uTime*0.003);
+          float clouds = vnoise(cloudUV)*0.65+vnoise(cloudUV*2.03+17.0)*0.35;
+          float cloudMask = smoothstep(0.52,0.72,clouds)*smoothstep(0.02,0.2,reflected.y);
+          reflection = mix(reflection,uSkyLow*0.78+uSunCol*uLight*0.22,cloudMask*0.5);
+          reflection = mix(reflection,uHaze,0.20);
+          float shore = 1.0-smoothstep(0.35,0.95,vWet);
+          vec3 water = mix(vec3(0.035,0.17,0.20),vec3(0.15,0.39,0.34),shore);
+          water *= 0.92+sin(wa+sin(wb))*0.08;
+          vec3 wc = mix(water*uLight,reflection,fres*0.80);
+          vec3 h = normalize(eye+uSun);
+          float spec = pow(max(dot(wn,h),0.0),mix(65.0,160.0,detail));
+          wc += uSunCol*uLight*spec*0.85;
+          float lace = smoothstep(0.72,0.96,sin(along*1.8+sin(across*1.3)-uTime*0.8));
+          wc += vec3(0.24,0.31,0.27)*uLight*shore*lace*0.18;
+          c = mix(c,wc,clamp(vWet,0.0,1.0));
         }
 
-        c *= uLight;
         c = mix(c, uHaze, smoothstep(uFog.x, uFog.y, dxz));
         // past the last of the ground the world simply gives out into haze
         c = mix(c, uHaze, (1.0 - smoothstep(-34.0, 4.0, vEdge)) * 0.92);

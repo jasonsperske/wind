@@ -20,7 +20,7 @@ const RINGS = [
 function bladeGeometry() {
   const segs = 4, pos = [], uvs = [], idx = [];
   for (let i = 0; i <= segs; i++) {
-    const t = i / segs, w = 0.052 * (1.0 - t * 0.92);
+    const t = i / segs, w = 0.044 * Math.pow(1.0 - t, 0.7) + 0.001;
     pos.push(-w, t, 0, w, t, 0);
     uvs.push(0, t, 1, t);
   }
@@ -108,7 +108,7 @@ export function createGrass() {
         float alt = max(uCam.y - gh, 0.0);
         float lift = 1.0 - smoothstep(8.0, 26.0, alt);
 
-        float H = (0.52 + aRand.x*0.72) * edge * cover * rim * lift;
+        float H = (0.58 + aRand.x*0.84) * edge * cover * rim * lift;
         float t = uv.y;
         vec3 p = position;
         // The same argument sideways: a blade narrower than the pixel it lands
@@ -123,10 +123,12 @@ export function createGrass() {
         // ambient breeze — the same gust fronts terrain.js paints on the hills,
         // travelling downwind at the same speed, so the two agree at the seam
         float along = dot(base, uWind), across = dot(base, vec2(-uWind.y, uWind.x));
-        float sway = sin(uTime*1.6 + base.x*0.34 + base.y*0.29 + aRand.z*6.28)*0.10
-                   + sin(uTime*0.55 + base.x*0.05 + base.y*0.04)*0.14
-                   + sin((along*0.085 - uTime*0.55)*6.2832 + across*0.283)*0.13;
+        float front = sin(along*0.14 - uTime*0.85 + sin(across*0.10)*0.65);
+        float sway = 0.20 + front*0.13
+                   + sin(along*0.43-uTime*1.5+aRand.z*1.5)*0.045;
         vec2 bend = uWind * sway;
+        // A small crosswind lets the tips trace soft arcs rather than flap.
+        bend += vec2(-uWind.y,uWind.x)*sin(uTime*0.72+along*0.12+aRand.z)*0.055;
 
         // the player's own gust
         vec2 d = base - uCam.xz;
@@ -138,12 +140,13 @@ export function createGrass() {
         bend = bend / max(bl,0.0001) * min(bl, 1.45);
         bl = length(bend);
         float k = t*t;
+        bend += vec2(cs,sn)*0.12*t;
         p.x += bend.x*H*k;  p.z += bend.y*H*k;
         p.y -= bl*H*k*0.42;
 
         vec3 w = vec3(base.x + p.x, gh + p.y, base.y + p.z);
-        vec3 dark = vec3(0.13,0.26,0.10);
-        vec3 tip  = mix(vec3(0.46,0.62,0.22), vec3(0.66,0.72,0.34), aRand.x);
+        vec3 dark = vec3(0.10,0.23,0.12);
+        vec3 tip  = mix(vec3(0.38,0.56,0.23), vec3(0.62,0.68,0.35), aRand.x);
         // straw where the ground turns to sand, grey sage where it freezes
         dark = mix(dark, vec3(0.35,0.29,0.16), lw.y);
         tip  = mix(tip,  vec3(0.80,0.70,0.45), lw.y);

@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { SKY_TOP, SKY_LOW, SUN, SUN_COL, HAZE } from './config.js';
+import { SKY_TOP, SKY_LOW, SUN, SUN_COL, HAZE, LIGHT } from './config.js';
 
-// The dome. In daylight it is a gradient with the sun's glow in it; after dark
-// the same shader grows a moon and a sky full of stars.
+// A single dome holds the atmosphere, drifting clouds, stars and distant
+// alpine ranges. No extra draw calls or screen-space effects in stereo.
 //
 // The stars are procedural rather than geometry — a hash per cell of a grid laid
 // over the view direction, with the star placed somewhere inside its own cell so
 // the field does not look like a lattice. That costs one extra fragment
 // function and no draw call, no buffer, and nothing to keep in sync as you fly.
 
-export function createSky() {
+export function createSky(conditions) {
   const uniforms = {
     uTop: { value: SKY_TOP }, uLow: { value: SKY_LOW },
     uSun: { value: SUN }, uSunCol: { value: SUN_COL }, uHaze: { value: HAZE },
@@ -18,6 +18,9 @@ export function createSky() {
     uSky: { value: new THREE.Vector4(0, 0, 22, 0) },
     // and how bright that glow is at all — nothing is in the sky on a new moon
     uGlow: { value: 0.45 },
+    uLight: { value: LIGHT },
+    uVisibility: { value: conditions.view },
+    uCloud: { value: 0.38 + conditions.damp * 0.9 },
   };
 
   const sky = new THREE.Mesh(
@@ -33,6 +36,7 @@ export function createSky() {
         }`,
       fragmentShader: `
         uniform vec3 uTop,uLow,uSun,uSunCol,uHaze; uniform vec4 uSky; uniform float uGlow;
+        uniform vec3 uLight; uniform float uVisibility, uCloud;
         varying vec3 vD;
 
         float hash31(vec3 p){
@@ -53,11 +57,28 @@ export function createSky() {
           return m * bright * twinkle;
         }
 
+        float noise2(vec2 p){
+          vec2 i = floor(p), f = fract(p);
+          f = f*f*(3.0-2.0*f);
+          return mix(mix(hash31(vec3(i,0.0)),hash31(vec3(i+vec2(1,0),0.0)),f.x),
+                     mix(hash31(vec3(i+vec2(0,1),0.0)),hash31(vec3(i+vec2(1,1),0.0)),f.x),f.y);
+        }
+        float cloudNoise(vec2 p){
+          return noise2(p)*0.57 + noise2(p*2.03+17.0)*0.28 + noise2(p*4.11+31.0)*0.15;
+        }
+        // Periodic angular ridges close seamlessly behind the viewer. These
+        // are distant scenery, beyond the playable field, with no new draws.
+        float ridge(float a, float seed){
+          return 0.075 + pow(1.0-abs(sin(a*3.0+seed)),1.35)*0.17
+            + abs(sin(a*11.0+seed*2.0))*0.060
+            + abs(sin(a*23.0+seed))*0.023;
+        }
         void main(){
+          vec3 d = normalize(vD);
           float t = clamp(vD.y*1.25+0.06, 0.0, 1.0);
           vec3 c = mix(uLow, uTop, pow(t,0.72));
 
-          float sd = dot(normalize(vD), uSun);
+          float sd = dot(d, uSun);
 
           // stars first, so the moon and the horizon haze sit over them
           if (uSky.x > 0.001) {
@@ -75,8 +96,38 @@ export function createSky() {
 
           c += uSunCol * pow(max(sd, 0.0), uSky.z) * uGlow;
 
-          float band = smoothstep(0.30, 0.0, abs(vD.y - 0.03));
+          // Broad, slow cloud banks and feathered high cloud. Fade the
+          // projection before the horizon; no rapidly shrinking cloud pixels.
+          vec2 cp = d.xz / max(d.y + 0.18, 0.12);
+          cp = cp*2.6 + vec2(uSky.w*0.007, uSky.w*0.003);
+          float density = cloudNoise(cp);
+          float cloud = smoothstep(0.58-uCloud*0.22,0.79-uCloud*0.18,density);
+          cloud *= smoothstep(0.015,0.16,d.y);
+          vec3 cloudCol = mix(uLow*0.78,uLow*0.65+uSunCol*uLight*0.48,
+                              smoothstep(0.42,0.75,density));
+          cloudCol = mix(cloudCol, uSunCol*uLight, pow(max(sd,0.0),12.0)*0.24);
+          c = mix(c,cloudCol,cloud*0.88);
+
+          float band = 1.0 - smoothstep(0.0, 0.30, abs(d.y - 0.03));
           c = mix(c, uHaze, band * 0.42);
+          // Three overlapping alpine ranges, lit facets and irregular snow
+          // lines. Weather hides the ranges together with the playable world.
+          float az = atan(d.z,d.x);
+          for (int layer=0; layer<3; layer++) {
+            float l = float(layer);
+            float peak = ridge(az,1.7+l*2.4)*(1.0-l*0.20)-l*0.025;
+            float slope = (ridge(az+0.008,1.7+l*2.4)-ridge(az-0.008,1.7+l*2.4))/0.016;
+            float facet = clamp(0.5+slope*0.25*(uSun.x*cos(az)+uSun.z*sin(az)),0.0,1.0);
+            vec3 rock = mix(vec3(0.19,0.25,0.30),vec3(0.40,0.43,0.44),facet);
+            float snowline = peak*0.68 + sin(az*37.0+l)*0.012;
+            float snow = smoothstep(snowline,snowline+0.025,d.y);
+            snow *= smoothstep(0.10,0.20,peak);
+            rock = mix(rock,vec3(0.79,0.85,0.88)*(0.72+facet*0.28),snow);
+            vec3 mountain = mix(rock*uLight,uHaze,0.72-l*0.13);
+            mountain = mix(mountain,uHaze,1.0-smoothstep(-0.03,0.13,d.y));
+            float edge = 1.0-smoothstep(peak-0.0015,peak+0.0015,d.y);
+            c = mix(c,mountain,edge*smoothstep(0.28,0.9,uVisibility));
+          }
           gl_FragColor = vec4(c,1.0);
         }`,
     })
