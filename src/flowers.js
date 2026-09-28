@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { terrainH, fieldAt, hash2, GLSL_HSV } from './field.js';
-import { HAZE, FOG, LIGHT, SUN, CELL, RING, FMAX, PET_PER } from './config.js';
+import { GLSL_HSV } from './field.js';
+import { flowerLayout } from './flower-layout.js';
+import { HAZE, FOG, LIGHT, SUN, CELL, FMAX, PET_PER } from './config.js';
 
 export function petalGeometry() {
   // A cupped teardrop with a raised centre vein. The shared shape also
@@ -58,11 +59,11 @@ function buildHeads() {
     vertexShader: GLSL_HSV + `
       attribute vec3 aBase; attribute float aSpin, aBloom, aHue;
       uniform float uTime; uniform vec3 uCam; uniform vec2 uFog;
-      varying vec3 vCol; varying float vFog;
+      varying vec3 vCol; varying float vFog; varying vec2 vUv; varying float vBud;
       void main(){
         float b = aBloom;
-        float len = 0.19 + b*0.17;
-        float wid = 0.12 + b*0.09;
+        float len = 0.25 + b*0.23;
+        float wid = 0.25 + b*0.27;
         vec3 p = vec3(position.x*wid, position.y*len, position.z*len);
         // pitch: nearly upright when a bud, fanned when open
         float pit = mix(0.16, 1.16, b) + sin(uTime*1.3 + aSpin*3.0)*0.05*b;
@@ -71,7 +72,9 @@ function buildHeads() {
         float cy = cos(aSpin), sy = sin(aSpin);
         p = vec3(p.x*cy - p.z*sy, p.y, p.x*sy + p.z*cy);
         vec3 w = aBase + p;
-        vec3 bud  = vec3(0.80,0.86,0.70);
+        w.x += sin(uTime*1.5 + aBase.x*0.2 + aBase.z*0.15)*0.035;
+        vUv = uv; vBud = 1.0-b;
+        vec3 bud  = vec3(0.96,0.83,0.49);
         vec3 open = mix(hue2rgb(aHue), vec3(1.0), 0.30);
         vCol = mix(bud, open, b) * (0.72 + 0.42*position.y);
         vCol += vec3(0.25,0.22,0.10) * (1.0-b) * 0.5;   // buds catch the light
@@ -79,8 +82,16 @@ function buildHeads() {
         gl_Position = projectionMatrix * viewMatrix * vec4(w,1.0);
       }`,
     fragmentShader: `
-      uniform vec3 uHaze,uLight; varying vec3 vCol; varying float vFog;
-      void main(){ gl_FragColor = vec4(mix(vCol * uLight, uHaze, vFog), 1.0); }`,
+      uniform vec3 uHaze,uLight; varying vec3 vCol; varying float vFog; varying vec2 vUv; varying float vBud;
+      void main(){
+        // A pale edge and a warm throat describe the cup without a bloom pass.
+        float edge = pow(abs(vUv.x*2.0-1.0),2.0);
+        vec3 c = vCol * (0.88 + edge*0.12);
+        c = mix(vec3(0.83,0.52,0.10), c, smoothstep(0.02,0.32,vUv.y));
+        c *= uLight;
+        c += vec3(0.16,0.105,0.028)*vBud*smoothstep(0.25,0.95,vUv.y);
+        gl_FragColor = vec4(mix(c, uHaze, vFog), 1.0);
+      }`,
   });
 
   const mesh = new THREE.Mesh(geometry, material);
@@ -90,9 +101,9 @@ function buildHeads() {
 
 function buildStems() {
   const geometry = new THREE.InstancedBufferGeometry();
-  // stems stand about half a metre — baked into the geometry
+  // Taller stems lift the buds above the short grass in their clearings.
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(
-    [-0.5, 0, 0, 0.5, 0, 0, -0.22, 0.48, 0, 0.22, 0.48, 0], 3));
+    [-0.5, 0, 0, 0.5, 0, 0, -0.22, 0.72, 0, 0.22, 0.72, 0], 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 1, 1], 2));
   geometry.setIndex([0, 1, 2, 1, 3, 2]);
 
@@ -116,8 +127,8 @@ function buildStems() {
       varying float vFog; varying float vT;
       void main(){
         vec3 p = vec3(position.x*0.028, position.y, 0.0);
-        float sway = sin(uTime*1.5 + aSeed*6.28)*0.05;
-        p.x += sway*position.y*position.y;
+        float sway = sin(uTime*1.5 + aBase.x*0.2 + aBase.z*0.15)*0.035;
+        p.x += sway*pow(position.y/0.72,2.0);
         vec3 w = aBase + p;
         vT = position.y;
         vFog = smoothstep(uFog.x, uFog.y, length(w.xz - uCam.xz));
@@ -136,7 +147,7 @@ function buildStems() {
   return { mesh, material, geometry, sBase, sSeed };
 }
 
-export function createFlowers(scene) {
+export function createFlowers(scene, meadow, home) {
   const heads = buildHeads();
   const stems = buildStems();
   scene.add(heads.mesh, stems.mesh);
@@ -146,37 +157,12 @@ export function createFlowers(scene) {
   let lastCellI = 1e9, lastCellJ = 1e9;
 
   function rebuild(px, pz) {
-    const ci = Math.round(px / CELL), cj = Math.round(pz / CELL);
-    const keep = {};
-    for (let i = 0; i < flowers.length; i++) keep[flowers[i].id] = flowers[i];
-    const next = [];
-    outer:
-    for (let i = ci - RING; i <= ci + RING; i++) {
-      for (let j = cj - RING; j <= cj + RING; j++) {
-        const h = hash2(i, j);
-        if (h > 0.42) continue;
-        const id = i + ',' + j;
-        let f = keep[id];
-        if (!f) {
-          const jx = (hash2(i + 0.5, j + 11.3) - 0.5) * CELL * 0.8;
-          const jz = (hash2(i + 7.1, j - 3.7) - 0.5) * CELL * 0.8;
-          const x = i * CELL + jx, z = j * CELL + jz;
-          // Nothing flowers on sand, ice or water, and nothing flowers out
-          // where the wind would have turned you around before you reached it.
-          const s = fieldAt(x, z);
-          if (s[2] < 4.0 || s[4] < 0.5 || s[7] > 0.2) continue;
-          f = {
-            id, x, z, y: terrainH(x, z),
-            hue: hash2(i * 3.3, j * 5.9), seed: h * 6.28,
-            bloom: bloomState[id] ? 1 : 0, target: bloomState[id] ? 1 : 0,
-            awarded: !!bloomState[id],
-          };
-        }
-        next.push(f);
-        if (next.length >= FMAX) break outer;
-      }
-    }
-    flowers = next;
+    const keep = new Map(flowers.map(f => [f.id, f]));
+    flowers = flowerLayout(px, pz, home).map(f => keep.get(f.id) || {
+      ...f, bloom: bloomState[f.id] ? 1 : 0, target: bloomState[f.id] ? 1 : 0,
+      awarded: !!bloomState[f.id],
+    });
+    meadow.rebuild(flowers, px, pz);
   }
 
   function writeBuffers() {
@@ -184,7 +170,7 @@ export function createFlowers(scene) {
     let k = 0;
     for (let i = 0; i < n; i++) {
       const f = flowers[i];
-      const headY = f.y + 0.46;
+      const headY = f.y + 0.72;
       stems.sBase.array[i * 3] = f.x;
       stems.sBase.array[i * 3 + 1] = f.y;
       stems.sBase.array[i * 3 + 2] = f.z;

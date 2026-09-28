@@ -8,6 +8,7 @@ import { createSky } from './sky.js';
 import { createPropWind } from './propwind.js';
 import { createTerrain, TERRAIN_STEP } from './terrain.js';
 import { createGrass } from './grass.js';
+import { createMeadow } from './meadow.js';
 import { createFlowers } from './flowers.js';
 import { createFlyingPetals, createCarriedPetals } from './petals.js';
 import { createVignette } from './vignette.js';
@@ -31,11 +32,12 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
 
   const sky = createSky(conditions);
   scene.add(sky.mesh);
-  const terrain = createTerrain();
+  const meadow = createMeadow();
+  const terrain = createTerrain(meadow);
   scene.add(terrain.mesh);
-  const grass = createGrass();
+  const grass = createGrass(meadow);
   scene.add(grass.mesh);
-  const flowers = createFlowers(scene);
+  const flowers = createFlowers(scene, meadow, world.home);
   const flying = createFlyingPetals(scene);
   const carried = createCarriedPetals(scene);
   const vignette = createVignette(camera);
