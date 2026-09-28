@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>The Wind · visual review</title>
+<style>
+  body { margin: 0; background: #18231c; color: #fff; font: 12px system-ui; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  aside { position: absolute; bottom: 20px; left: 24px; padding: 12px 16px; background: #10231bcc; border-radius: 4px; }
+  strong { display: block; font-size: 14px; margin-bottom: 4px; }
+</style>
+<script type="importmap">{"imports":{"three":"/vendor/three.module.js"}}</script>
+<aside><strong>THE WIND · WIND RESPONSE STUDY</strong><span id="stats">Preparing scene…</span></aside>
+<script type="module">
+import * as THREE from 'three';
+import { createGame } from '/src/game.js';
+import { loadWorld } from '/src/regions.js';
+import { setField, terrainH } from '/src/field.js';
+import { conditions } from '/src/daylight.js';
+import { QUALITY } from '/src/config.js';
+
+// Fixed random seed, camera and simulation time make PR captures comparable.
+let seed = 1742;
+Math.random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+const query = new URLSearchParams(location.search);
+const map = {meadow: 'world', lake: 'lake', whiteout: 'whiteout'}[query.get('map')] || 'world';
+const world = await loadWorld(`/world/${map}.svg`);
+setField(world);
+const renderer = new THREE.WebGLRenderer({antialias: true});
+renderer.setPixelRatio(1);
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(), rig = new THREE.Group();
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 900);
+rig.add(camera); scene.add(rig);
+const input = {takeMouseLook: () => ({yaw: 0, pitch: 0}), turn: () => 0, pitch: () => 0, boost: () => 0};
+const hud = {show() {}, update() {}, note() {}};
+const game = createGame({renderer, scene, camera, rig, input, hud, world,
+  conditions: conditions(query.get('time') || 'day', query.get('weather') || 'clear', 1)});
+const p = game.player;
+if (['bloom', 'ripple'].includes(query.get('shot'))) {
+  // Hold over the first cluster long enough to open it through normal gameplay.
+  const x = world.home.x - Math.sin(0.7)*9, z = world.home.z - Math.cos(0.7)*9;
+  for (let i = 0; i < 18; i++) {
+    p.pos.set(x, terrainH(x,z)+1.2, z);
+    game.update(0.05);
+  }
+}
+p.pos.set(world.home.x, terrainH(world.home.x, world.home.z) + 1.65, world.home.z);
+p.yaw = 0.7; p.pitch = -0.06;
+if (['bloom', 'ripple'].includes(query.get('shot'))) {
+  p.pos.x -= Math.sin(0.7)*5; p.pos.z -= Math.cos(0.7)*5;
+  p.pos.y = terrainH(p.pos.x,p.pos.z)+1.5;
+  p.pitch = -0.15;
+}
+game.update(0);
+if (['trail','trail-side'].includes(query.get('shot'))) {
+  p.petals = 70;
+  for (let i = 0; i < 90; i++) {
+    p.yaw = 0.7 + i*0.012;
+    p.pos.y = terrainH(p.pos.x,p.pos.z)+3;
+    game.update(1/60);
+  }
+}
+const delay = Math.max(0, Math.min(8, Number(query.get('delay') ?? 0.45) || 0));
+game.idle(query.get('shot') === 'ripple' ? delay : 0);
+const quality = QUALITY[query.get('quality')];
+if (quality) {
+  for (const mesh of scene.children) {
+    if (mesh.geometry?.attributes.aTile) mesh.geometry.instanceCount = quality.grass;
+  }
+}
+if (query.get('shot') === 'trail-side') {
+  // Diagnostic side view: inspect the actual world-space path, not a gameplay camera.
+  camera.position.set(9,5,8);
+  camera.lookAt(p.pos.clone().add(new THREE.Vector3(0,0,3)));
+  document.querySelector('strong').textContent = 'THE WIND · PATH INSPECTION CAMERA';
+}
+renderer.render(scene, camera);
+const errors = renderer.info.programs.filter(p => p.diagnostics && !p.diagnostics.runnable).length;
+document.getElementById('stats').textContent = `${query.get('time') || 'day'} · fixed camera / seed / wind · ${renderer.info.render.calls} draws · ${renderer.info.render.triangles.toLocaleString()} triangles · ${errors} shader errors`;
+</script>
+</html>

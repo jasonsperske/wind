@@ -240,6 +240,7 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
     /* ---- flowers and petals ---- */
     const opened = flowers.update(dt, camPos, player.pos);
     for (const f of opened) {
+      meadow.bloom(f, elapsed);
       chime(f.hue);
       flying.spawn(f, 3 + Math.floor(hash2(f.x, f.z) * 3));
     }
@@ -254,6 +255,7 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
     sky.mesh.position.copy(camPos);
 
     /* ---- uniforms ---- */
+    meadow.update(elapsed);
     grass.material.uniforms.uCam.value.copy(camPos);
     grass.material.uniforms.uVel.value.copy(vel);
     grass.material.uniforms.uTime.value = elapsed;
@@ -287,6 +289,7 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
 
   function idle(dt) {
     elapsed += dt;
+    meadow.update(elapsed);
     grass.material.uniforms.uTime.value = elapsed;
     terrain.material.uniforms.uTime.value = elapsed;   // the far hills keep moving too
     flowers.setTime(elapsed);

@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { GLSL_HSV } from './field.js';
-import { LIGHT, FLYMAX, CARRY_MAX } from './config.js';
+import { LIGHT, SUN, HAZE, FOG, FLYMAX, CARRY_MAX } from './config.js';
 import { petalGeometry } from './flowers.js';
+import { createPetalPath, FLOW_POINTS } from './petal-path.js';
 
 /* ----------------------- petals in flight toward you ---------------------- */
 export function createFlyingPetals(scene) {
@@ -52,7 +53,7 @@ export function createFlyingPetals(scene) {
     for (let g = 0; g < count; g++) {
       if (flying.length >= FLYMAX) break;
       flying.push({
-        p: new THREE.Vector3(f.x + (Math.random() - 0.5) * 0.4, f.y + 0.5, f.z + (Math.random() - 0.5) * 0.4),
+        p: new THREE.Vector3(f.x + (Math.random() - 0.5) * 0.4, f.y + 0.82, f.z + (Math.random() - 0.5) * 0.4),
         v: new THREE.Vector3((Math.random() - 0.5) * 3, 2 + Math.random() * 2, (Math.random() - 0.5) * 3),
         hue: 0.92 + f.hue * 0.22,
         rot: Math.random() * 6.28,
@@ -91,8 +92,9 @@ export function createFlyingPetals(scene) {
   return { spawn, update };
 }
 
-/* -------------------- petals already swirling around you ------------------ */
+/* ---------------------- petals carried along the wind -------------------- */
 export function createCarriedPetals(scene) {
+  const path = createPetalPath();
   const geometry = new THREE.InstancedBufferGeometry();
   const src = petalGeometry();
   geometry.setAttribute('position', src.getAttribute('position'));
@@ -107,35 +109,55 @@ export function createCarriedPetals(scene) {
     side: THREE.DoubleSide, transparent: true, depthWrite: false,
     uniforms: {
       uTime: { value: 0 }, uCam: { value: new THREE.Vector3() },
-      uCount: { value: 0 }, uFwd: { value: new THREE.Vector3(0, 0, -1) }, uSpeed: { value: 0 },
-      uLight: { value: LIGHT },
+      uFlow: { value: path.points }, uLight: { value: LIGHT }, uSun: { value: SUN },
+      uHaze: { value: HAZE }, uFog: { value: FOG },
     },
     vertexShader: GLSL_HSV + `
       attribute float aIdx;
-      uniform float uTime, uCount, uSpeed; uniform vec3 uCam, uFwd;
-      varying vec3 vCol; varying float vHide;
+      uniform float uTime; uniform vec3 uCam, uSun;
+      uniform vec3 uFlow[${FLOW_POINTS}];
+      uniform vec2 uFog;
+      varying vec3 vCol; varying float vAlpha, vFog;
       void main(){
-        vHide = step(uCount, aIdx);
-        float f = fract(aIdx*0.6180339);
-        float ang = aIdx*2.39996 + uTime*(0.55 + f*0.8) - uSpeed*0.03;
-        float rad = 0.85 + f*1.7;
-        float yy  = -0.55 + 1.1*fract(aIdx*0.37) + sin(uTime*0.8 + aIdx)*0.18;
-        vec3 side = normalize(cross(vec3(0.0,1.0,0.0), uFwd));
-        vec3 up   = vec3(0.0,1.0,0.0);
-        vec3 pos  = uCam + side*cos(ang)*rad + uFwd*(sin(ang)*rad - 0.5) + up*yy;
-        vec3 R = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
-        vec3 U = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
-        float rot = uTime*(1.4 + f*1.6) + aIdx;
-        float c = cos(rot), s = sin(rot);
-        vec2 q = vec2(position.x*0.10, (position.y-0.5)*0.16);
-        q = vec2(q.x*c - q.y*s, q.x*s + q.y*c);
-        vec3 w = pos + R*q.x + U*q.y + cross(R,U)*position.z*0.16;
-        vCol = mix(hue2rgb(0.92 + f*0.22), vec3(1.0), 0.32)*(0.78+0.22*uv.y);
+        float seed = fract(aIdx*0.6180339);
+        float phase = fract(seed + uTime*0.085);
+        float along = phase*${(FLOW_POINTS-1).toFixed(1)};
+        int segment = int(min(floor(along),${(FLOW_POINTS-2).toFixed(1)}));
+        vec3 a = uFlow[segment], b = uFlow[segment+1];
+        vec3 center = mix(a,b,along-float(segment));
+        vec3 tangent = b-a;
+        tangent = dot(tangent,tangent)>0.000001 ? normalize(tangent) : vec3(0.0,0.0,-1.0);
+        // Keep the side vector finite for a near-vertical flight path.
+        vec3 side = cross(tangent,vec3(0.0,1.0,0.0));
+        if (dot(side,side)<0.001) side = vec3(1.0,0.0,0.0);
+        side = normalize(side);
+        vec3 up = normalize(cross(side,tangent));
+        float strand = mod(aIdx,2.0)*2.0-1.0;
+        float curl = sin(phase*10.0-uTime*1.1+strand)*0.28;
+        float spread = 1.15 + sin(phase*3.14159)*0.65;
+        vec3 pos = center + side*(strand*spread+curl)
+          + up*(-0.25+sin(phase*13.0+uTime*0.7)*0.28+fract(aIdx*0.37)*0.35);
+
+        // Rotate a world-space cup, shared by both eyes, rather than a camera card.
+        float roll = uTime*(0.8+seed*0.7)+aIdx*2.4;
+        float pitch = sin(uTime*1.4+aIdx)*0.65;
+        vec3 R = side*cos(roll)+up*sin(roll);
+        vec3 U = (-side*sin(roll)+up*cos(roll))*cos(pitch)+tangent*sin(pitch);
+        vec3 N = normalize(cross(R,U));
+        vec3 w = pos + R*position.x*0.19 + U*(position.y-0.5)*0.28 + N*position.z*0.28;
+        vec3 color = mix(hue2rgb(0.92+fract(aIdx*0.75487766)*0.22),vec3(1.0),0.38);
+        float through = pow(max(dot(normalize(uCam-w),-uSun),0.0),3.0);
+        vCol = color*(0.78+0.22*uv.y)*(0.80+abs(dot(N,uSun))*0.20)
+             + vec3(0.15,0.11,0.035)*through;
+        // Fade before reaching the face and at the wrap from tail back to lead.
+        vAlpha = smoothstep(1.35,2.5,length(pos-uCam))
+               * smoothstep(0.0,0.07,phase)*(1.0-smoothstep(0.91,1.0,phase));
+        vFog = smoothstep(uFog.x,uFog.y,length(pos-uCam));
         gl_Position = projectionMatrix * viewMatrix * vec4(w,1.0);
       }`,
     fragmentShader: `
-      uniform vec3 uLight; varying vec3 vCol; varying float vHide;
-      void main(){ if (vHide > 0.5) discard; gl_FragColor = vec4(vCol * uLight, 0.92); }`,
+      uniform vec3 uLight,uHaze; varying vec3 vCol; varying float vAlpha,vFog;
+      void main(){ gl_FragColor = vec4(mix(vCol*uLight,uHaze,vFog),vAlpha*0.94); }`,
   });
 
   const mesh = new THREE.Mesh(geometry, material);
@@ -143,13 +165,10 @@ export function createCarriedPetals(scene) {
   scene.add(mesh);
 
   function update(camPos, fwd, elapsed, speed, petals) {
-    const n = Math.min(petals, CARRY_MAX);
+    path.update(camPos,fwd,elapsed,speed);
     material.uniforms.uCam.value.copy(camPos);
     material.uniforms.uTime.value = elapsed;
-    material.uniforms.uSpeed.value = speed;
-    material.uniforms.uCount.value = n;
-    material.uniforms.uFwd.value.copy(fwd).setY(0).normalize();
-    geometry.instanceCount = n;
+    geometry.instanceCount = Math.max(0,Math.min(Math.floor(petals),CARRY_MAX));
   }
 
   return { update };
