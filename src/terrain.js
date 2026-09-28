@@ -28,7 +28,7 @@ export function createTerrain(meadow) {
     vertexShader: GLSL_FIELD + GLSL_MEADOW + `
       uniform float uTime;
       varying vec3 vW; varying vec3 vN; varying vec3 vL;
-      varying float vClearing; varying float vBase; varying float vEdge; varying float vWet;
+      varying vec3 vMeadow; varying float vBase; varying float vEdge; varying float vWet;
       void main(){
         vec3 w = (modelMatrix * vec4(position,1.0)).xyz;
         w.y = terrainH(w.xz);
@@ -38,7 +38,7 @@ export function createTerrain(meadow) {
         vN = normalize(vec3(-hx, 2.0*e, -hz));
         vec4 f = fieldA(w.xz);
         vec4 b = fieldB(w.xz);
-        vClearing = flowerClearing(w.xz);
+        vMeadow = vec3(meadowAt(w.xz),bloomWave(w.xz).z);
         vBase = f.x;            // what this region calls sea level
         vEdge = f.z;            // metres to the edge of the world, negative outside
         vWet = b.a;
@@ -51,7 +51,7 @@ export function createTerrain(meadow) {
       uniform float uTime,uGrassR,uAlt;
       uniform vec3 uSkyTop,uSkyLow,uSunCol;
       varying vec3 vW; varying vec3 vN; varying vec3 vL;
-      varying float vClearing; varying float vBase; varying float vEdge; varying float vWet;
+      varying vec3 vMeadow; varying float vBase; varying float vEdge; varying float vWet;
 
       // Value noise off the same sin-hash everything else in the world is
       // scattered with. It is all in world coordinates, so none of it moves
@@ -112,7 +112,9 @@ export function createTerrain(meadow) {
 
         vec3 tundra = mix(vec3(0.62,0.69,0.77), vec3(0.96,0.98,1.00), m*0.35 + rise*0.65);
 
-        meadow = mix(meadow, vec3(0.20,0.30,0.085),vClearing*0.45);
+        meadow = mix(meadow, vec3(0.20,0.30,0.085),vMeadow.r*0.45);
+        meadow = mix(meadow, vec3(0.25,0.36,0.095),vMeadow.g*0.45);
+        meadow += vec3(0.14,0.095,0.015)*vMeadow.b;
         vec3 base = meadow*lw.x + dune*lw.y + tundra*lw.z;
 
         // clumps break the flat wash; the laid strips go pale and a little warm

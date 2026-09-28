@@ -111,7 +111,9 @@ export function createGrass(meadow) {
 
         // Broad rooted patches vary the silhouette; shorter grass frames each bud.
         float tuft = sin(base.x*0.23+sin(base.y*0.17))*sin(base.y*0.29+base.x*0.07)*0.5+0.5;
-        float clearing = flowerClearing(base);
+        vec2 meadow = meadowAt(base);
+        float clearing = meadow.r;
+        vec3 bloom = bloomWave(base);
         float H = (0.42 + aRand.x*0.50) * mix(0.72,1.15,tuft)
                 * mix(1.0,0.30,clearing) * edge * cover * rim * lift;
         float t = uv.y;
@@ -131,7 +133,7 @@ export function createGrass(meadow) {
         float front = sin(along*0.14 - uTime*0.85 + sin(across*0.10)*0.65);
         float sway = 0.32 + front*0.20
                    + sin(along*0.43-uTime*1.5+aRand.z*1.5)*0.045;
-        vec2 bend = uWind * sway;
+        vec2 bend = uWind * sway + bloom.xy*0.42;
         // A small crosswind lets the tips trace soft arcs rather than flap.
         bend += vec2(-uWind.y,uWind.x)*sin(uTime*0.72+along*0.12+aRand.z)*0.055;
 
@@ -160,6 +162,7 @@ export function createGrass(meadow) {
         tip  = mix(tip,  vec3(0.80,0.70,0.45), lw.y);
         dark = mix(dark, vec3(0.28,0.34,0.33), lw.z);
         tip  = mix(tip,  vec3(0.63,0.71,0.70), lw.z);
+        tip = mix(tip, tip*vec3(0.94,1.13,0.88), meadow.g*0.65);
         vCol = mix(dark, tip, smoothstep(0.0,1.0,t)*0.88+0.12);
         // Rounded blade lighting and backlit tips give the field depth.
         vec3 normal = normalize(vec3(-sn,0.28+bl*0.35,cs));
@@ -172,6 +175,7 @@ export function createGrass(meadow) {
         // A pale tip on dark ground is a bright dot once it is a pixel wide, and
         // a field of bright dots crawls. Far blades give their tips back up.
         vCol = mix(vCol, dark*1.2, smoothstep(uRadius*0.42, uRadius, dist)*0.55);
+        vCol += vec3(0.20,0.16,0.035)*bloom.z*t;
         vBlade = uv;
         // The blades mostly leave by getting shorter, ring by ring, into ground
         // that is already moving like grass. A little haze over the last of them
