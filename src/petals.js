@@ -32,8 +32,8 @@ export function createFlyingPetals(scene) {
         float c = cos(aRot), s = sin(aRot);
         vec2 q = vec2(position.x*0.13, (position.y-0.5)*0.20);
         q = vec2(q.x*c - q.y*s, q.x*s + q.y*c);
-        vec3 w = aPos + R*q.x + U*q.y;
-        vCol = mix(hue2rgb(aHue), vec3(1.0), 0.35);
+        vec3 w = aPos + R*q.x + U*q.y + cross(R,U)*position.z*0.20;
+        vCol = mix(hue2rgb(aHue), vec3(1.0), 0.35)*(0.78+0.22*uv.y);
         gl_Position = projectionMatrix * viewMatrix * vec4(w,1.0);
       }`,
     fragmentShader: `
@@ -129,8 +129,8 @@ export function createCarriedPetals(scene) {
         float c = cos(rot), s = sin(rot);
         vec2 q = vec2(position.x*0.10, (position.y-0.5)*0.16);
         q = vec2(q.x*c - q.y*s, q.x*s + q.y*c);
-        vec3 w = pos + R*q.x + U*q.y;
-        vCol = mix(hue2rgb(0.92 + f*0.22), vec3(1.0), 0.32);
+        vec3 w = pos + R*q.x + U*q.y + cross(R,U)*position.z*0.16;
+        vCol = mix(hue2rgb(0.92 + f*0.22), vec3(1.0), 0.32)*(0.78+0.22*uv.y);
         gl_Position = projectionMatrix * viewMatrix * vec4(w,1.0);
       }`,
     fragmentShader: `

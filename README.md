@@ -224,9 +224,14 @@ wetness mask is the one thing in the bake that is deliberately *not* blurred.
 
 Trees and rocks come off a fixed lattice thinned by `data-density`, the same
 trick the flowers use, so a tree is in the same place every time you pass it and
-none of it is stored. They sway in your gust as the grass does. **Nothing is
-solid** — you are wind, you go through the branches. Making them stop you would
-be a real change to how the game feels, so it is not in.
+none of it is stored. Woodland mixes rounded oaks, slender silver birches and layered pines. Broad
+density patches leave clearings and irregular groves; nearby trees tend to share
+a species, with variation in height and rotation. All species share the same
+quality budget, with nearer trees drawn first. They sway in your gust as the grass does. Trees and boulders gently turn and drift the wind
+around them as you approach, with a stable passing side and the comfort vignette
+during the turn. The bypass eases away once you pass and ignores obstacles below
+your flight height. Larger boulders start redirecting you earlier. It is a soft
+wind influence, not a hard collision. Map-edge wind takes priority near the boundary.
 
 ### Grass, near and far
 

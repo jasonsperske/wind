@@ -5,8 +5,10 @@ import { settings } from './settings.js';
 import { Turner, approach } from './turning.js';
 import { createBoundary, turnRate, pushSpeed, wrapAngle } from './boundary.js';
 import { createSky } from './sky.js';
+import { createPropWind } from './propwind.js';
 import { createTerrain, TERRAIN_STEP } from './terrain.js';
 import { createGrass } from './grass.js';
+import { createMeadow } from './meadow.js';
 import { createFlowers } from './flowers.js';
 import { createFlyingPetals, createCarriedPetals } from './petals.js';
 import { createVignette } from './vignette.js';
@@ -28,18 +30,21 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
   primeHaze(conditions);
   setWeatherSound(conditions.kind, conditions.fall);
 
-  const sky = createSky();
+  const sky = createSky(conditions);
   scene.add(sky.mesh);
-  const terrain = createTerrain();
+  const meadow = createMeadow();
+  const terrain = createTerrain(meadow);
   scene.add(terrain.mesh);
-  const grass = createGrass();
+  const grass = createGrass(meadow);
   scene.add(grass.mesh);
-  const flowers = createFlowers(scene);
+  const flowers = createFlowers(scene, meadow, world.home);
   const flying = createFlyingPetals(scene);
   const carried = createCarriedPetals(scene);
   const vignette = createVignette(camera);
   const vrHud = createVrHud(scene);
   const boundary = createBoundary(world);
+  const propWind = createPropWind();
+  const propFlow = { turn: 0, amount: 0, x: 0, z: 0 };
   const minimap = createMinimap(world);
   const props = createProps(scene, world);
   const weather = createWeather(scene);
@@ -147,6 +152,14 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
       turnBack = Math.abs(off) < most ? off : Math.sign(off) * most;
     }
 
+    // Read the current view in both desktop and XR, then lean around trees and boulders.
+    // The boundary keeps priority where woodland meets the map edge.
+    camera.getWorldDirection(fwd);
+    const propHeading = Math.atan2(fwd.x, fwd.z);
+    propWind(player.pos, propHeading, player.speed, props.nearbyObstacles(player.pos), dt, propFlow);
+    const propWeight = 1 - edge.push;
+    turnBack += propFlow.turn * dt * propWeight;
+
     /* ---- steering ---- */
     if (inXR) {
       tryFoveation();
@@ -174,7 +187,7 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
       rig.rotation.y = rigYaw;
     }
 
-    vignette.set(settings.vignette ? Math.max(turner.amount * 0.9, edge.push * 0.6) : 0);
+    vignette.set(settings.vignette ? Math.max(turner.amount * 0.9, edge.push * 0.6, propFlow.amount * propWeight * 0.7) : 0);
 
     /* ---- where the wind actually is ---- */
     placeRig(inXR);
@@ -195,6 +208,14 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
 
     vel.copy(fwd).multiplyScalar(player.speed);
     vel.y -= SINK;
+    const horizontalSpeed = Math.hypot(vel.x, vel.z);
+    vel.x += propFlow.x * propWeight;
+    vel.z += propFlow.z * propWeight;
+    const steeredSpeed = Math.hypot(vel.x, vel.z);
+    if (steeredSpeed > 0) {
+      vel.x *= horizontalSpeed / steeredSpeed;
+      vel.z *= horizontalSpeed / steeredSpeed;
+    }
     // and the headwind itself, so a nose held stubbornly outward still loses
     if (edge.push > 0) {
       const shove = pushSpeed(edge.push, edge.beyond);
@@ -269,6 +290,8 @@ export function createGame({ renderer, scene, camera, rig, input, hud, world, co
     grass.material.uniforms.uTime.value = elapsed;
     terrain.material.uniforms.uTime.value = elapsed;   // the far hills keep moving too
     flowers.setTime(elapsed);
+    sky.set(conditions.time.stars, conditions.time.moon,
+      conditions.time.glow, conditions.time.glowAmt, elapsed);
   }
 
   // place the rig and fill the uniforms before the first frame
