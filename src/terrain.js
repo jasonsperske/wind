@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLSL_FIELD, fieldUniforms } from './field.js';
+import { GLSL_MEADOW } from './meadow.js';
 import { SUN, LIGHT, HAZE, FOG, GRASS_R, WIND_DIR, SKY_TOP, SKY_LOW, SUN_COL } from './config.js';
 
 // The ground follows you, and it is a grid, so it has to be re-centred on a
@@ -10,7 +11,7 @@ export const TERRAIN_SPAN = 320;
 export const TERRAIN_SEGS = 128;
 export const TERRAIN_STEP = TERRAIN_SPAN / TERRAIN_SEGS;
 
-export function createTerrain() {
+export function createTerrain(meadow) {
   const geo = new THREE.PlaneGeometry(TERRAIN_SPAN, TERRAIN_SPAN, TERRAIN_SEGS, TERRAIN_SEGS);
   geo.rotateX(-Math.PI / 2);
 
@@ -23,11 +24,11 @@ export function createTerrain() {
       uHaze: { value: HAZE }, uFog: { value: FOG },
       uCam: { value: new THREE.Vector3() }, uTime: { value: 0 },
       uWind: { value: WIND_DIR }, uGrassR: { value: GRASS_R }, uAlt: { value: 0 },
-    }, fieldUniforms()),
-    vertexShader: GLSL_FIELD + `
+    }, fieldUniforms(), meadow.uniforms),
+    vertexShader: GLSL_FIELD + GLSL_MEADOW + `
       uniform float uTime;
       varying vec3 vW; varying vec3 vN; varying vec3 vL;
-      varying float vBase; varying float vEdge; varying float vWet;
+      varying float vClearing; varying float vBase; varying float vEdge; varying float vWet;
       void main(){
         vec3 w = (modelMatrix * vec4(position,1.0)).xyz;
         w.y = terrainH(w.xz);
@@ -37,6 +38,7 @@ export function createTerrain() {
         vN = normalize(vec3(-hx, 2.0*e, -hz));
         vec4 f = fieldA(w.xz);
         vec4 b = fieldB(w.xz);
+        vClearing = flowerClearing(w.xz);
         vBase = f.x;            // what this region calls sea level
         vEdge = f.z;            // metres to the edge of the world, negative outside
         vWet = b.a;
@@ -49,7 +51,7 @@ export function createTerrain() {
       uniform float uTime,uGrassR,uAlt;
       uniform vec3 uSkyTop,uSkyLow,uSunCol;
       varying vec3 vW; varying vec3 vN; varying vec3 vL;
-      varying float vBase; varying float vEdge; varying float vWet;
+      varying float vClearing; varying float vBase; varying float vEdge; varying float vWet;
 
       // Value noise off the same sin-hash everything else in the world is
       // scattered with. It is all in world coordinates, so none of it moves
@@ -110,6 +112,7 @@ export function createTerrain() {
 
         vec3 tundra = mix(vec3(0.62,0.69,0.77), vec3(0.96,0.98,1.00), m*0.35 + rise*0.65);
 
+        meadow = mix(meadow, vec3(0.20,0.30,0.085),vClearing*0.45);
         vec3 base = meadow*lw.x + dune*lw.y + tundra*lw.z;
 
         // clumps break the flat wash; the laid strips go pale and a little warm
